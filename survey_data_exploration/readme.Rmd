@@ -1,0 +1,9 @@
+---
+title: "readme"
+output: html_document
+---
+
+In this part we explore the data from the survey holospm.
+This data are collected by the video sampling method of Ifremer.
+The video analysis has been conducted by a deep-learning software.
+This part is essentially composed of exploratory statistics.

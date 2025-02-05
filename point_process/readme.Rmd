@@ -1,0 +1,8 @@
+---
+title: "readme"
+output: html_document
+---
+
+In this part we will focus on the principle  of point process.
+First understand what it is and try work simulated data.
+Then check this on the survey data.
