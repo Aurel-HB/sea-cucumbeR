@@ -56,10 +56,16 @@ plot(X)
 library(rnaturalearth)
 library(rnaturalearthdata)
 map <- ne_countries(type = "countries", country = "Saint Pierre and Miquelon",
-                    scale = "small", returnclass = "sf")
+                    scale = "medium", returnclass = "sf")
 map <- st_transform(map, crs = "EPSG:29172")
 win <- as.owin(map)
 X <- runifpoint(100, win = win)
 plot(X)
 
-load("")
+library(here)
+shp <- st_read(dsn=paste(here(),"/point_process/Data", sep=""), layer = "grille_zee_spm")
+zee <- st_transform(shp, crs = "ESRI:102002")
+zee <- zee$geometry
+win <- as.owin(zee)
+X <- runifpoint(100, win = win)
+plot(X)
