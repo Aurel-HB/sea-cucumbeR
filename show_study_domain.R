@@ -35,7 +35,7 @@ summary(spm)
 plot(spm)
 #test autoplot
 autoplot.bathy(spm, geom=c("tile","contour")) +
-  scale_fill_gradient2(low="dodgerblue4", mid="gainsboro", high="darkgreen") +
+  scale_fill_gradient2(low="navy", mid="lightblue", high="darkgreen") +
   #geom_point(data = ctd, aes(x = Longitude, y = Latitude),
   #           colour = 'black', size = 3, alpha = 1, shape = 15) +
   labs(y = "Latitude", x = "Longitude", fill = "Elevation") +
@@ -96,8 +96,8 @@ ggplot(zee)+
                bins = 4, colour = "black", show.legend = FALSE) +
   geom_contour_filled(data = Bathy_offshore, aes(x = lon, y = lat, z = value),
                bins = 6, colour = "black", show.legend = FALSE) +
-  discrete_scale('fill', 'myscale', colorRampPalette(c("#deebf7", "#63a4d8")))+
-  geom_sf(color = "royalblue", fill = "#78c679BB" )+
+  discrete_scale('fill', 'myscale', colorRampPalette(c("#deebf7", "#306094")))+#63a4d8
+  geom_sf(color = "royalblue", fill = "#e41a1cAA" )+
   geom_sf(data=world, fill = "tan")+
   theme(aspect.ratio = 1,
         legend.title = element_blank(),
@@ -116,3 +116,4 @@ ggplot(zee)+
   annotation_scale(location = "bl", line_width = .5) +
   annotation_north_arrow(location = "tr", height = unit(0.7, "cm"), width = unit(0.7, "cm")) + 
   theme() 
+
