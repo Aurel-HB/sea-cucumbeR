@@ -2,5 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
-
-\SIG_Data/
+.shp
+.shx
+SIG_Data/
