@@ -2,4 +2,4 @@
 .Rhistory
 .RData
 .Ruserdata
-git rm --cached SIG_Data
+dir_to_ignore/SIG_Data
