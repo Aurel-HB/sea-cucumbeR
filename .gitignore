@@ -2,4 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
-dir_to_ignore/SIG_Data
+
+\SIG_Data/
