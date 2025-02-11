@@ -114,6 +114,6 @@ ggplot(zee)+
   xlab("")+ylab("")+
   labs(title = "Banc de Saint Pierre et Zone d'étude du projet")+
   annotation_scale(location = "bl", line_width = .5) +
-  annotation_north_arrow(location = "tr", height = unit(0.7, "cm"), width = unit(0.7, "cm")) + 
+  annotation_north_arrow(location = "tr", height = unit(1, "cm"), width = unit(1, "cm")) + 
   theme() 
 
