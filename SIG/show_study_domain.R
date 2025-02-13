@@ -12,19 +12,19 @@ library(RColorBrewer)
 world <- ne_download(scale = 10, type = 'countries', returnclass = "sf")
 
 #import the grid and the area
-shp_grid <- st_read(dsn=paste(here(),"/SIG_Data", sep=""), layer = "grille_zee_spm")
+shp_grid <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""), layer = "grille_zee_spm")
 #zee <- st_transform(shp, crs = "ESRI:102002")
 grid_zee <- st_transform(shp_grid, crs = "EPSG:4326")
 grid_zee <- grid_zee$geometry
 
 # from www.marineregions.org
-shp <- st_read(dsn=paste(here(),"/SIG_Data", sep=""), layer = "eez")
+shp <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""), layer = "eez")
 zee <- st_transform(shp, crs = "EPSG:4326")
 zee <- zee$geometry
 
 #bathy ####
 #file to heavy
-#shp_bathy <- st_read(dsn=paste(here(),"/SIG_Data", sep=""), layer = "bathy_10m")
+#shp_bathy <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""), layer = "bathy_10m")
 #bathy <- st_transform(shp_bathy, crs = "EPSG:4326")
 #bathy <- bathy$geometry
 #ggplot()+geom_sf(data=bathy, fill = "navyblue")
@@ -117,3 +117,6 @@ ggplot(zee)+
   annotation_north_arrow(location = "tr", height = unit(1, "cm"), width = unit(1, "cm")) + 
   theme() 
 
+#sea floor tmp
+sea_floor_tmp <- readRDS(paste(here(), "/SIG/SIG_Data/sea_floor_tmp.rds",
+                               sep=""))
