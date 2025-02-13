@@ -61,6 +61,18 @@ Bathy_coast <- Bathy %>%
   dplyr::filter(between(value,-500,0)) %>%
   mutate(value = value *-1)
 
+Bathy_zee <- Bathy %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "lon") %>%
+  gather(lat, value, -1) %>%
+  mutate_all(funs(as.numeric))
+Bathy_zee <- st_as_sf(Bathy_zee, crs = "EPSG:4326", coords = c("lon","lat"))
+
+Bathy_tot <- Bathy %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "lon") %>%
+  gather(lat, value, -1) %>%
+  mutate_all(funs(as.numeric))
 
 #lat <- round(unique(Bathy$lat), digits = 3)
 ggplot()+
@@ -92,6 +104,29 @@ ggplot(zee)+
   theme()
 
 ggplot(zee)+
+  geom_sf(data = Bathy_zee, aes(color=value))+
+  scale_color_viridis(option = "mako")+
+  geom_sf(color = "royalblue", fill = "#fcfbfdAA" )+
+  geom_sf(data=world, fill = "tan")+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "#d0d1e6"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  coord_sf(xlim = c(-58,-54), ylim = c(43,48), expand = FALSE)+
+  xlab("")+ylab("")+
+  labs(title = "Banc de Saint Pierre et Zone d'étude du projet")+
+  annotation_scale(location = "bl", line_width = .5) +
+  annotation_north_arrow(location = "tr", height = unit(1, "cm"), width = unit(1, "cm")) + 
+  theme() 
+
+ggplot(zee)+
   geom_contour_filled(data = Bathy_coast, aes(x = lon, y = lat, z = value),
                bins = 4, colour = "black", show.legend = FALSE) +
   geom_contour_filled(data = Bathy_offshore, aes(x = lon, y = lat, z = value),
@@ -120,3 +155,46 @@ ggplot(zee)+
 #sea floor tmp
 sea_floor_tmp <- readRDS(paste(here(), "/SIG/SIG_Data/sea_floor_tmp.rds",
                                sep=""))
+
+ggplot(zee)+
+  geom_sf(data = sea_floor_tmp['tmpJan'], aes(color=tmpJan), size = 6)+
+  scale_color_viridis()+
+  geom_contour(data = Bathy_tot, aes(x = lon, y = lat, z = value),
+                      bins = 25, colour = "black") +
+  geom_sf(color = "royalblue", fill = "#fcfbfdAA" )+
+  geom_sf(data=world, fill = "tan")+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "#d0d1e6"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  coord_sf(xlim = c(-58,-54), ylim = c(43,48), expand = FALSE)+
+  xlab("")+ylab("")+
+  labs(title = "Banc de Saint Pierre et Zone d'étude du projet")+
+  annotation_scale(location = "bl", line_width = .5) +
+  annotation_north_arrow(location = "tr", height = unit(1, "cm"), width = unit(1, "cm")) + 
+  theme() 
+
+# We want to keep the data of the domain of study
+location <- st_intersects(zee,sea_floor_tmp)
+obs <- sea_floor_tmp[location[[1]],]
+
+ggplot()+
+  geom_sf(data = zee, color = "royalblue", fill = "#fcfbfdAA" )+
+  geom_sf(data = obs['tmpJan'], aes(color=tmpJan))+
+  scale_color_viridis()+
+  theme_bw()
+
+location <- st_intersects(zee,Bathy_zee)
+obs <- Bathy_zee[location[[1]],]
+
+ggplot()+
+  geom_sf(data = obs, aes(color=value))+
+  geom_sf(data = zee, color = "royalblue", fill = "#fcfbfdAA" )+
+  theme_bw()
