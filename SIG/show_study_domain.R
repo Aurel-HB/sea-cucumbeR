@@ -7,6 +7,7 @@ library(ggspatial)
 library(marmap)
 library(tidyverse)
 library(RColorBrewer)
+library(viridis)
 #library(mapsf)
 
 world <- ne_download(scale = 10, type = 'countries', returnclass = "sf")
