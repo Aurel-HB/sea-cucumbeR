@@ -58,6 +58,19 @@ for (indice in (1:length(data.filter[,1]))) {
   }
 }
 
+start_frame <- as.numeric(
+  data.filter$X3..Unique.Frame.Identifier[1]
+  ) - as.numeric(
+  str_sub(string = data.filter$X3..Unique.Frame.Identifier[1],
+          start=-2, end=-1))
+                      
+
+data.filter <- data.filter %>% 
+  mutate(X3..Unique.Frame.Identifier = as.numeric(
+    X3..Unique.Frame.Identifier) - start_frame)
+
+
+
 data.process <- rbind(data.row[1,], data.filter[,1:dim(data.row)[2]])
 # export csv ###
 write.csv(data.process, paste(path_output,name_video,".csv", sep =""), row.names=FALSE)
@@ -109,6 +122,17 @@ for (name_video in names_video) {
       data.filter$X2..Video.or.Image.Identifier[indice] <- new_time
     }
   }
+  
+  start_frame <- as.numeric(
+    data.filter$X3..Unique.Frame.Identifier[1]
+  ) - as.numeric(
+    str_sub(string = data.filter$X3..Unique.Frame.Identifier[1],
+            start=-2, end=-1))
+  
+  
+  data.filter <- data.filter %>% 
+    mutate(X3..Unique.Frame.Identifier = as.numeric(
+      X3..Unique.Frame.Identifier) - start_frame)
   
   data.process <- rbind(data.row[1,], data.filter[,1:dim(data.row)[2]])
   # export csv ###
