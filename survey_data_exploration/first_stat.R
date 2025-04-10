@@ -1,3 +1,6 @@
+# This code compare the detection and the correction to determine the quality 
+# of the AI model
+
 #library
 library(here)
 library(stringr)

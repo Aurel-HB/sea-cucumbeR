@@ -1,3 +1,6 @@
+# This code transform the csv files from the survey HOLOSPMTV21 in the good 
+# format of the protocol associated to the survey
+
 #library
 library(here)
 library(stringr)
