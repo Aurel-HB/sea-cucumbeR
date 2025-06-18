@@ -1,3 +1,4 @@
+#This code is a tutorial about point process
 #https://www.paulamoraga.com/book-spatial/
 library(spatstat)
 

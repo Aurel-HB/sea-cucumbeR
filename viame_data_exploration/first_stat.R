@@ -10,9 +10,9 @@ library(viridis)
 
 #path
 path_input <- paste(here(),
-                    "/survey_data_exploration/anotate_Data/row_data/", sep="")
+                    "/viame_data_exploration/anotate_Data/row_data/", sep="")
 path_output <- paste(here(),
-                     "/survey_data_exploration/anotate_Data/process_data/",
+                     "/viame_data_exploration/anotate_Data/process_data/",
                      sep="")
 
 # test work for one video ####

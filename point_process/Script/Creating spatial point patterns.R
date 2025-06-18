@@ -1,3 +1,4 @@
+#This code is a tutorial about to create a spatial point pattern
 #https://www.paulamoraga.com/book-spatial/
 library(spatstat)
 
