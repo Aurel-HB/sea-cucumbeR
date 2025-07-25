@@ -43,7 +43,7 @@ plot(pinhom, main = "Inhomogeneous")
 #test
 library(sf)
 library(here)
-shp <- st_read(dsn=paste(here(),"/SIG_Data", sep=""), layer = "grille_zee_spm")
+shp <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""), layer = "grille_zee_spm")
 zee <- st_transform(shp, crs = "ESRI:102002")
 zee <- zee$geometry
 win <- as.owin(zee)

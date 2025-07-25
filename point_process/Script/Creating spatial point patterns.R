@@ -4,7 +4,7 @@ library(spatstat)
 
 # creation of object of class owin
 win <- owin(xrange = c(0, 1), yrange = c(0, 2))
-#plot(win)
+plot(win)
 
 ##method 1
 # simulation of 100 points in the window
@@ -64,7 +64,7 @@ X <- runifpoint(100, win = win)
 plot(X)
 
 library(here)
-shp <- st_read(dsn=paste(here(),"/point_process/Data", sep=""), layer = "grille_zee_spm")
+shp <- st_read(dsn=paste(here(),"/SIG/SIG_Data/", sep=""), layer = "grille_zee_spm")
 zee <- st_transform(shp, crs = "ESRI:102002")
 zee <- zee$geometry
 win <- as.owin(zee)
