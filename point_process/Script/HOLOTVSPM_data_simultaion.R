@@ -7,6 +7,7 @@ library(spatstat)
 library(dplyr)
 library(ggplot2)
 library(tweedie)
+library(ggspatial)
 
 # creation of object of class owin
 # the haul length is 500m and the gopro view 1m50
@@ -19,6 +20,26 @@ shp_grid <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""),
                     layer = "grille_zee_spm")
 # filter the square that are in the sampling zone
 shp_grid <- shp_grid %>% dplyr::filter(!is.na(Echantillo))
+
+#creation color vector based on Echantillo displaying the sampling plan
+shp_grid <- shp_grid %>%
+  mutate(Echantillo = ifelse(Id == 193, "VIDEO", Echantillo))
+
+shp_grid$color_sampling <- c(NA)
+
+shp_grid$color_sampling[grep(pattern = "VIDEO", shp_grid$Echantillo)] <- 
+  "lightsalmon3"
+shp_grid$color_sampling[grep(pattern = "PECHE", shp_grid$Echantillo)] <- 
+  "seagreen3"
+shp_grid$color_sampling[grep(pattern = "CROCHE", shp_grid$Echantillo)] <- 
+  "#990000"
+shp_grid$color_sampling[grep(pattern = "ECHANTILLONNAGE",
+                             shp_grid$Echantillo)] <- "#fffbfd00"
+shp_grid$color_sampling[is.na(shp_grid$Echantillo)] <- "#fffbfd00"
+
+# save the sf object for mapping the area and doing beautiful map
+saveRDS(shp_grid,
+        file = paste(here(),"/point_process/Output/shp_grid.rds", sep=""))
 
 # extract the centroid of each square to facilitate the plot of station
 sampling_centroid <- st_centroid(shp_grid) %>%
@@ -88,10 +109,10 @@ shp_grid_sampling <- st_as_sf(shp_grid_sampling)
 
 # save and load shp_grid_sampling
 saveRDS(shp_grid_sampling,
-        file = paste(here(),"/point_process/Data/holo_simu_intensity.csv",
+        file = paste(here(),"/point_process/Output/holo_simu_intensity.rds",
                      sep=""))
 shp_grid_sampling <- readRDS(
-  paste(here(), "/point_process/Data/holo_simu_intensity.csv", sep=""))
+  paste(here(), "/point_process/Output/holo_simu_intensity.rds", sep=""))
 
 #### Prepare PPP ####
 # create a ppp per station using the density as intensity
@@ -121,4 +142,80 @@ for (i in 1:length(data_abun$abun)){
 data_abun$station <- gsub(pattern = "STN",replacement = "",data_abun$station)
 
 saveRDS(data_abun,
-        file = paste(here(),"/point_process/Data/holo_simu.csv", sep=""))
+        file = paste(here(),"/point_process/Output/holo_simu_abun.rds", sep=""))
+
+
+#### Prepare the table with individual position ####
+###### test for one haul ###
+##From ppp to sf
+# ppp object
+X <- list_PPP[[1]]
+# create data frame with coordinates
+ddf <- data.frame(presence = 1, x = X$x, y = X$y)
+# spatialised in sampling area with centroid of a sampled square
+ddf$x <- ddf$x + shp_grid_sampling$X[1]
+ddf$y <- ddf$y + shp_grid_sampling$Y[1]
+# create sf object with data frame and name of coordinates
+d <- st_as_sf(ddf, coords = c("x", "y"))
+
+## plot the PPP on the map ###
+ggplot()+
+  #geom_sf(data = shp_grid, color = "black",
+  #        fill = shp_grid$color_sampling)+
+  geom_point(data = ddf, aes(x = x, y= y, colour = "green"))+
+  theme(title = element_text(color = "black",face = "bold"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "lightblue"),
+        legend.background = element_rect(fill = "white"),
+        legend.key = element_rect(fill = "white", color = NA),
+        legend.key.size = unit(.3, "cm"))+
+  annotation_scale(location = "bl", line_width = .3) +
+  annotation_north_arrow(location = "tr", height = unit(0.5, "cm"),
+                         width = unit(0.5, "cm")) +
+  theme()
+
+###### creation of data_position ###
+##From ppp to sf
+
+data_position <- data.frame()
+ 
+for (i in 1:length(list_PPP)){
+  # ppp object
+  X <- list_PPP[[i]]
+  # create data frame with coordinates
+  ddf <- data.frame(presence = 1, station = names(list_PPP)[i],
+                    x = X$x, y = X$y)
+  # spatialised in sampling area with centroid of a sampled square
+  ddf$x <- ddf$x + shp_grid_sampling$X[i]
+  ddf$y <- ddf$y + shp_grid_sampling$Y[i]
+  data_position <- rbind(data_position, ddf)
+}
+# create sf object with data frame and name of coordinates
+data_position <- data_position %>%
+  mutate(long = x) %>%
+  mutate(lat = y)
+data_position <- st_as_sf(data_position, coords = c("x", "y")) %>% 
+  st_set_crs(., 4467)
+
+## plot the PPP on the map ###
+ggplot()+
+  geom_sf(data = shp_grid, color = "black",
+          fill = shp_grid$color_sampling)+
+  geom_point(data = data_position, aes(x = long, y= lat))+
+  theme(title = element_text(color = "black",face = "bold"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "lightblue"),
+        legend.background = element_rect(fill = "white"),
+        legend.key = element_rect(fill = "white", color = NA),
+        legend.key.size = unit(.3, "cm"))+
+  annotation_scale(location = "bl", line_width = .3) +
+  annotation_north_arrow(location = "tr", height = unit(0.5, "cm"),
+                         width = unit(0.5, "cm")) +
+  theme()
+
+data_position$station <- gsub(pattern = "STN",
+                              replacement = "",data_position$station)
+
+saveRDS(data_position,
+        file = paste(here(),"/point_process/Output/holo_simu_position.rds",
+                     sep=""))
