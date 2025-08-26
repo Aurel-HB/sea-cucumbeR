@@ -50,6 +50,9 @@ sampling_centroid <- st_centroid(shp_grid) %>%
 # load a example of data to calibrate the simulation
 holo23 <- read.csv(paste(here(),"/point_process/Data/holo23.csv", sep=""),
                    sep = ";")
+source(paste(here(),"/point_process/Script/fct_probability_distribution.R",
+             sep=""))
+
 # choice of a distribution for the biomass  ####
 loi <- "Lognormale"
 ggplot(data = holo23, aes(x = Biomass, y = after_stat(density))) +
@@ -88,6 +91,9 @@ ggplot(data = holo23, aes(x = Abun, y = after_stat(density))) +
 shp_grid_sampling <- merge(holo23["Station"], sampling_centroid,
                            by.x = "Station", by.y = "Id")
 
+#set.seed(26) # for reproducibility
+set.seed(13)
+
 #add the abun from a probability distribution
 #shp_grid_sampling$abun <- rgamma(n = length(shp_grid_sampling$Station),
 #                                 shape = 1.1, scale = 400)
@@ -100,8 +106,8 @@ shp_grid_sampling$abun <- shp_grid_sampling$abun/win.area
 
 # keep interested column and spatialised shp_grid_sampling
 shp_grid_sampling <- data.frame(shp_grid_sampling[,1:2],
-                                shp_grid_sampling[,7:8],
-                                "Intensity" = shp_grid_sampling[,9],
+                                shp_grid_sampling[,8:9],
+                                "Intensity" = shp_grid_sampling[,10],
                                 shp_grid_sampling[,6])
 shp_grid_sampling <- st_as_sf(shp_grid_sampling)
 
@@ -120,6 +126,7 @@ shp_grid_sampling <- readRDS(
 #phom <- rpoispp(lambda = 1.366813, win = win)
 #phom$n
 
+set.seed(20) # for reproducibility
 list_PPP <- list()
 for (i in 1:length(shp_grid_sampling$Station)){
   #Homogeneous point process
@@ -219,3 +226,4 @@ data_position$station <- gsub(pattern = "STN",
 saveRDS(data_position,
         file = paste(here(),"/point_process/Output/holo_simu_position.rds",
                      sep=""))
+
