@@ -1,6 +1,5 @@
 # This code try to simulate a dataset that could be from the survey HOLOTVSPM
-# First the number of Sea cucumber/haul is simulate  probability distribution
-# Inside each haul, a ppp simulate the distribution of the species
+
 library(here)
 library(sf)
 library(spatstat)
@@ -8,6 +7,14 @@ library(dplyr)
 library(ggplot2)
 library(tweedie)
 library(ggspatial)
+
+
+#############################################################
+# Part 1 - Simulation by dredge haul
+#############################################################
+
+# First the number of Sea cucumber/haul is simulate  probability distribution
+# Inside each haul, a ppp simulate the distribution of the species
 
 # creation of object of class owin
 # the haul length is 500m and the gopro view 1m50
@@ -226,4 +233,9 @@ data_position$station <- gsub(pattern = "STN",
 saveRDS(data_position,
         file = paste(here(),"/point_process/Output/holo_simu_position.rds",
                      sep=""))
+
+#############################################################
+# Part 2 - Simulation of the complete zone by a point process
+#############################################################
+
 
