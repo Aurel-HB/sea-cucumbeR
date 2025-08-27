@@ -8,6 +8,11 @@ library(ggplot2)
 library(ggspatial)
 library(boot)
 
+
+#############################################################
+# work on simulated data
+#############################################################
+
 shp_grid <-readRDS(
   paste(here(),"/point_process/Output/shp_grid.rds", sep=""))
 data_position <- readRDS(
@@ -33,9 +38,9 @@ for (i in unique(data_position$station)){
 
 data_abun$abun <- abun
 
-#############################################################
-# Calculate biomass with extrapolation of density of haul to square
-#############################################################
+
+# Calculate biomass with extrapolation of density of haul to square #####
+
 
 # param for real data
 vitesseNavire <- 1.4 # (in mile/h) can be changed by a vector if available
@@ -137,3 +142,83 @@ ggplot(data.frame(Biomass = boot_bio), aes(x = Biomass)) +
 
 #data_compare <- data.frame() # run only the first time
 data_compare <- rbind(data_compare, data_stat)
+saveRDS(data_compare,
+        file = paste(here(),
+                     "/point_process/Output/holo_simu_reduction_comparison.rds",
+                     sep=""))
+
+#############################################################
+# work on real data
+#############################################################
+
+ici <- paste(here(),"/via3_data_exploration/Data/raw/", sep="")
+
+#load the data
+raw.data <- data.frame()
+myxls <- list.files(ici)[grepl('.csv',list.files(ici))]
+
+
+for (i in 1:length(myxls)){
+  data <- read.csv(paste(ici,myxls[i], sep = ""), 
+                   sep = ",", header = TRUE, skip = 9)
+  raw.data <- rbind(raw.data, data)
+}
+
+data <- raw.data
+
+#############
+#prepare data
+#############
+
+# extract type of annotation ####
+shape <- c()
+for (variable in 1:length(data$metadata)) {
+  test <- data$spatial_coordinates[variable]
+  test <- substr(test,start = 2, stop = 2)
+  shape <- c(shape,as.numeric(test))
+}
+data <- data.frame(data, shape)
+
+# extraction coordinates ####
+extract <- data$spatial_coordinates
+
+x_pixel <- c()
+y_pixel <- c()
+for (variable in 1:length(extract)) {
+  test <- extract[variable]
+  test <- strsplit(test,split = ",")
+  x_pixel <- c(x_pixel,as.numeric(test[[1]][2]))
+  y <- test[[1]][3]
+  y_pixel <- c(y_pixel,as.numeric(gsub(pattern = "]",replacement = "",y)))
+}
+
+data <- data.frame(data,x_pixel,y_pixel)
+
+time <- c()
+for (variable in 1:length(data$temporal_coordinates)) {
+  test <- data$temporal_coordinates[variable]
+  test <- substr(test,start = 2, stop = nchar(test))
+  test <- gsub(pattern = "]",replacement = "",test)
+  time <- c(time,as.numeric(test))
+}
+
+data <- data.frame(data, time)
+
+# extract station ####
+station <- c()
+for (variable in 1:length(data$temporal_coordinates)) {
+  test <- data$file_list[variable]
+  test <- substr(test,start = 13, stop = 15)
+  test <- gsub(pattern = "_",replacement = "",test)
+  station <- c(station,as.numeric(test))
+}
+
+data <- data.frame(data, station)
+
+#############
+data <- data[,7:11]
+
+#############
+#test with high and low density (106 and 133)
+#############
+
