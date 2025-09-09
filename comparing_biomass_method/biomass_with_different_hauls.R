@@ -218,11 +218,17 @@ data <- data.frame(data, station)
 #############
 data <- data[,7:11]
 
+saveRDS(data, paste(here(),
+                    "/via3_data_exploration/Data/processed/data_position_2025",
+                    sep=""))
+
+data <- readRDS(paste(here(),
+                      "/via3_data_exploration/Data/processed/data_position_2025",
+                      sep=""))
 #############
 #test with high, medium and low density (133, 98 and 106)
 #############
 data.low <- data %>% filter(station==106)
-data.high <- data %>% filter(station==133)
 data.medium <- data %>% filter(station==98)
 
 #### low density ####
@@ -299,91 +305,107 @@ data_stat_4 <- data.frame(
 data_stat <- rbind(data_stat_2,data_stat_4)
 
 #### high density ####
-data.compare.high <- data.frame(reduction = 0, abun = nrow(data.high))
-
-# reduction per 2
-reduction <- 2
-start <- seq(0,600-300,30)
-stop <- start + 300
-abun <- c()
-for (i in 1:length(start)){
-  value <- nrow(data.high %>% 
-                  filter(time > start[i]) %>%
-                  filter(time <= stop[i]))
-  abun <- c(abun,value*2)
-}
-
-data.compare.high <- rbind(data.compare.high,
+high.station <- c(114,
+                  133,
+                  149,
+                  167)
+data_stat <- data.frame()
+for (indice in high.station){
+  data.high <- data %>% filter(station==indice)
+  
+  data.compare.high <- data.frame(reduction = 0, abun = nrow(data.high))
+  
+  # reduction per 2
+  reduction <- 2
+  start <- seq(round(min(data.high$time)/60, digits = 0)*60,
+               600-300,30)
+  stop <- start + 300
+  abun <- c()
+  for (i in 1:length(start)){
+    value <- nrow(data.high %>% 
+                    filter(time > start[i]) %>%
+                    filter(time <= stop[i]))
+    abun <- c(abun,value*2)
+  }
+  
+  data.compare.high <- rbind(data.compare.high,
                              data.frame(
                                reduction = reduction,
                                abun = abun))
-
-# used statistics
-stat_high_2 <- data.compare.high$abun[data.compare.high$reduction==2]
-data_stat_2 <- data.frame(
-  reduction = reduction,
-  median_value = median(stat_high_2),
-  quantile_5 = quantile(stat_high_2, 0.05),
-  quantile_95 = quantile(stat_high_2, 0.95),
-  mean_value = mean(stat_high_2),
-  sd = sd(stat_high_2)
-)
-
-# reduction per 4
-reduction <- 4
-start <- seq(0,600-150,10)
-stop <- start + 150
-abun <- c()
-for (i in 1:length(start)){
-  value <- nrow(data.high %>% 
-                  filter(time > start[i]) %>%
-                  filter(time <= stop[i]))
-  abun <- c(abun,value*4)
-}
-
-data.compare.high <- rbind(data.compare.high,
+  
+  # used statistics
+  stat_high_2 <- data.compare.high$abun[data.compare.high$reduction==2]
+  data_stat_2 <- data.frame(
+    station = indice,
+    reduction = reduction,
+    median_value = median(stat_high_2),
+    quantile_5 = quantile(stat_high_2, 0.05),
+    quantile_95 = quantile(stat_high_2, 0.95),
+    mean_value = mean(stat_high_2),
+    sd = sd(stat_high_2)
+  )
+  
+  # reduction per 4
+  reduction <- 4
+  start <- seq(round(min(data.high$time)/60, digits = 0)*60,
+               600-150,10)
+  stop <- start + 150
+  abun <- c()
+  for (i in 1:length(start)){
+    value <- nrow(data.high %>% 
+                    filter(time > start[i]) %>%
+                    filter(time <= stop[i]))
+    abun <- c(abun,value*4)
+  }
+  
+  data.compare.high <- rbind(data.compare.high,
                              data.frame(
                                reduction = reduction,
                                abun = abun))
-
-# used statistics
-stat_high_4 <- data.compare.high$abun[data.compare.high$reduction==4]
-data_stat_4 <- data.frame(
-  reduction = reduction,
-  median_value = median(stat_high_4),
-  quantile_5 = quantile(stat_high_4, 0.05),
-  quantile_95 = quantile(stat_high_4, 0.95),
-  mean_value = mean(stat_high_4),
-  sd = sd(stat_high_4)
-)
-
-
-# reduction per 10
-reduction <- 10
-start <- seq(0,600-60,10)
-stop <- start + 60
-abun <- c()
-for (i in 1:length(start)){
-  value <- nrow(data.high %>% 
-                  filter(time > start[i]) %>%
-                  filter(time <= stop[i]))
-  abun <- c(abun,value*10)
+  
+  # used statistics
+  stat_high_4 <- data.compare.high$abun[data.compare.high$reduction==4]
+  data_stat_4 <- data.frame(
+    station = indice,
+    reduction = reduction,
+    median_value = median(stat_high_4),
+    quantile_5 = quantile(stat_high_4, 0.05),
+    quantile_95 = quantile(stat_high_4, 0.95),
+    mean_value = mean(stat_high_4),
+    sd = sd(stat_high_4)
+  )
+  
+  
+  # reduction per 10
+  reduction <- 10
+  start <- seq(round(min(data.high$time)/60, digits = 0)*60,
+               600-60,10)
+  stop <- start + 60
+  abun <- c()
+  for (i in 1:length(start)){
+    value <- nrow(data.high %>% 
+                    filter(time > start[i]) %>%
+                    filter(time <= stop[i]))
+    abun <- c(abun,value*10)
+  }
+  
+  data.compare.high <- rbind(data.compare.high,
+                             data.frame(
+                               reduction = reduction,
+                               abun = abun))
+  
+  # used statistics
+  stat_high_10 <- data.compare.high$abun[data.compare.high$reduction==10]
+  data_stat_10 <- data.frame(
+    station = indice,
+    reduction = reduction,
+    median_value = median(stat_high_10),
+    quantile_5 = quantile(stat_high_10, 0.05),
+    quantile_95 = quantile(stat_high_10, 0.95),
+    mean_value = mean(stat_high_10),
+    sd = sd(stat_high_10)
+  )
+  
+  data_stat <- rbind(data_stat,data_stat_2,data_stat_4,data_stat_10)
+  
 }
-
-data.compare.high <- rbind(data.compare.high,
-                           data.frame(
-                             reduction = reduction,
-                             abun = abun))
-
-# used statistics
-stat_high_10 <- data.compare.high$abun[data.compare.high$reduction==10]
-data_stat_10 <- data.frame(
-  reduction = reduction,
-  median_value = median(stat_high_10),
-  quantile_5 = quantile(stat_high_10, 0.05),
-  quantile_95 = quantile(stat_high_10, 0.95),
-  mean_value = mean(stat_high_10),
-  sd = sd(stat_high_10)
-)
-
-data_stat <- rbind(data_stat_2,data_stat_4,data_stat_10)
