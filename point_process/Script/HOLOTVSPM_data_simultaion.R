@@ -30,7 +30,8 @@ shp_grid <- shp_grid %>% dplyr::filter(!is.na(Echantillo))
 
 #creation color vector based on Echantillo displaying the sampling plan
 shp_grid <- shp_grid %>%
-  mutate(Echantillo = ifelse(Id == 193, "VIDEO", Echantillo))
+  mutate(Echantillo = ifelse(Id == 193, "VIDEO", Echantillo)) %>%
+  mutate(Echantillo = ifelse(Id == 104, "PAS ECHANTILLONNAGE", Echantillo))
 
 shp_grid$color_sampling <- c(NA)
 
@@ -46,7 +47,8 @@ shp_grid$color_sampling[is.na(shp_grid$Echantillo)] <- "#fffbfd00"
 
 # save the sf object for mapping the area and doing beautiful map
 saveRDS(shp_grid,
-        file = paste(here(),"/point_process/Output/shp_grid.rds", sep=""))
+        file = paste(here(),"/SIG/SIG_Data/sf_sampling_grid.rds", sep=""))
+shp_grid <- readRDS(paste(here(),"/SIG/SIG_Data/sf_sampling_grid.rds", sep=""))
 
 # extract the centroid of each square to facilitate the plot of station
 sampling_centroid <- st_centroid(shp_grid) %>%
