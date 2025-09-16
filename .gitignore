@@ -4,6 +4,7 @@
 .Ruserdata
 .shp
 .shx
+.dat
 SIG_Data/
 Environment_Data/
 anotate_Data/
