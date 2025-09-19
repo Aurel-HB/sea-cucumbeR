@@ -129,6 +129,7 @@ count_tot <- read.csv(paste(here(),
 count_tot <- count_tot %>%
   filter(!is.na(x = Date))
 
+
 # import the feuille_route to have stop and start coordinates ###
 feuille_route <- read.csv(paste(here(),
                             "/via3_data_exploration/Data/feuille_route_2025.csv",
@@ -302,18 +303,24 @@ tuyau_grid <- readRDS(paste(
   here(),"/SIG/SIG_Data/sf_sampling_grid.rds",
   sep=""))
 
+tuyau_grid <- tuyau_grid %>%
+  mutate(Echantillo = ifelse(Id == 144, "VIDEO + PECHE", Echantillo))
+
 sampling_grid <- tuyau_grid[
   grep(pattern = "VIDEO", tuyau_grid$Echantillo),] %>%
   mutate(abun = 0) %>%
   mutate(tot_time = 0) %>%
-  mutate(distance = 0)
+  mutate(distance = 0) %>%
+  mutate(annot_time = 0) %>%
+  mutate(start_time = 0)
 
 # extract the centroid of each square to facilitate the plot of station
 sampling_grid <- st_centroid(sampling_grid) %>%
   mutate(X = st_coordinates(.)[,1]) %>%
   mutate(Y = st_coordinates(.)[,2])
 
-for (stn in as.character(sampling_grid$Id)){
+for (indice in 1:nrow(sampling_grid)){
+  stn <- as.character(sampling_grid$Id[indice])
   #calculate the abundance
   data <- data_position %>% filter(station == stn)
   abun <- nrow(data)
@@ -336,13 +343,71 @@ for (stn in as.character(sampling_grid$Id)){
                    crs = CRS("+init=epsg:4467"))
   distance <- as.numeric(st_distance(start,stop))
   
+  #extract the time read in second
+  count <- count_tot %>% filter(STN == stn)
+  second <- count$Secondes.lues[1]
   
+  #extract the time of annotation start
+  time_start <- as.POSIXlt(count$Start[1], format = "%H:%M:%S")
+  time_start <- time_start$min*60 +time_start$sec
+  
+  # replace the value in the table
+  sampling_grid$abun[indice] <- abun
+  sampling_grid$tot_time[indice] <- data_start$temps
+  sampling_grid$distance[indice] <- distance
+  sampling_grid$annot_time[indice] <- second
+  sampling_grid$start_time[indice] <- time_start
   
 }
 rm(data, abun, data_start, data_stop,x_start,y_start,x_stop,y_stop,
-   start,stop,distance)
+   start,stop,distance, count, second)
 
 
+# approximation of the distance realized during a video
+sampling_grid <- sampling_grid %>%
+  mutate(annot_distance = annot_time*distance/tot_time)
+
+#calculate area sampled then the density per haul
+sampling_grid <- sampling_grid %>%
+  mutate(area = annot_distance*1.5) %>% #1.5m is the view field of the Gopro
+  mutate(intensity = abun/area) # individual per meter square
+
+data_abun_2025 <- sampling_grid[,c("Id","X","Y","abun","intensity",
+                                   "area","annot_time","geometry")]
+names(data_abun_2025) <- c("station","X","Y","abun","intensity",
+                           "area","reading_time","geometry")
+saveRDS(data_abun_2025,
+        paste(here(),
+              "/via3_data_exploration/Data/processed/data_abun_2025.rds",
+              sep=""))
+
+data_abun_2025 <- readRDS(paste(
+  here(),"/via3_data_exploration/Data/processed/data_abun_2025.rds",
+  sep=""))
+
+#add start tim and start distance at the summary of the annotation
+count_tot$time_start <- as.POSIXlt(count_tot$Start, format = "%H:%M:%S")
+count_tot$time_start <- count_tot$time_start$min*60 +count_tot$time_start$sec
+#calculate the start of the video in meter
+count_tot <- count_tot %>%
+  mutate(start_distance = 0)
+for (indice in 1:nrow(count_tot)){
+  stn <- as.numeric(count_tot$STN[indice])
+  if (!is.na(stn)){
+    data <- sampling_grid %>% filter(Id == stn)
+    count_tot$start_distance[indice] <- count_tot$time_start[indice]*
+      data$distance[1]/data$tot_time[1]
+  }
+  
+}
 
 
+saveRDS(count_tot,
+        paste(here(),
+              "/via3_data_exploration/Data/processed/HOLOTVSPM2025.rds",
+              sep=""))
+
+count_tot <- readRDS(paste(
+  here(),"/via3_data_exploration/Data/processed/HOLOTVSPM2025.rds",
+  sep=""))
 

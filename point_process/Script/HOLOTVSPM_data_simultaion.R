@@ -30,8 +30,7 @@ shp_grid <- shp_grid %>% dplyr::filter(!is.na(Echantillo))
 
 #creation color vector based on Echantillo displaying the sampling plan
 shp_grid <- shp_grid %>%
-  mutate(Echantillo = ifelse(Id == 193, "VIDEO", Echantillo)) %>%
-  mutate(Echantillo = ifelse(Id == 104, "PAS ECHANTILLONNAGE", Echantillo))
+  mutate(Echantillo = ifelse(Id == 193, "VIDEO", Echantillo))
 
 shp_grid$color_sampling <- c(NA)
 
