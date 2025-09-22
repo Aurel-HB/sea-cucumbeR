@@ -603,6 +603,35 @@ fviz_pca_var(acp3, col.var = "cos2",
              gradient.cols = c("black", "orange", "green"),
              repel = TRUE)
 
+
+
+# acp correlation
+x <- as.data.frame(data_PPP_2025) %>% 
+  select(L_area_dif, g_area_dif, MAD_test,
+         DCLF_test)
+row.names(x) <- data_PPP_2025$station
+
+acp3 = FactoMineR::PCA(x,scale.unit=F, ncp=5, graph=F)
+fviz_pca_biplot(acp3,
+                addEllipses = T,      # Add ellipses for categories
+                repel = F,            # Avoid label overlap
+                title = "PCA Biplot")+
+  theme() +
+  labs(title = "Customized PCA Biplot")
+
+# acp spacing
+x <- as.data.frame(data_PPP_2025) %>% 
+  select(hopkins_index,J_area_dif,J_area_percent)
+row.names(x) <- data_PPP_2025$station
+
+acp3 = FactoMineR::PCA(x,scale.unit=F, ncp=5, graph=F)
+fviz_pca_biplot(acp3,
+                addEllipses = T,      # Add ellipses for categories
+                repel = F,            # Avoid label overlap
+                title = "PCA Biplot")+
+  theme() +
+  labs(title = "Customized PCA Biplot")
+
 # plot the PPP ####
 ggplot(data = data_position)+
   geom_point(aes(x=X,y=Y))+
