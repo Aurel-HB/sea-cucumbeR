@@ -169,6 +169,7 @@ integrate(function(x){x}, lower = 0, upper = max(L3$r))$value -
 data_PPP_2025 <- data_abun_2025 %>% select(station,intensity) %>%
   mutate(L_area_dif = 0) %>%
   mutate(g_area_dif = 0) %>%
+  mutate(g_ratio = 0) %>%
   mutate(MAD_test = 0) %>%
   mutate(DCLF_test = 0)
 
@@ -206,8 +207,13 @@ for (indice in 1:nrow(data_PPP_2025)){
               subdivisions=2000)$value # error due to not enougth subdivision
   # the reference for a Poisson ppp is g(r)=1
   g_dif <- max(L$r) - integrate(as.function(g), 
-                                 lower = 0, upper = max(L$r))$value
+                                 lower = 0, upper = max(L$r),
+                                subdivisions = 2000)$value
   #g_dif negative = cluster and g_dif positive = inhibition
+  g_ratio <- integrate(as.function(g), 
+                       lower = 0, upper = max(L$r),
+                       subdivisions = 2000)$value / max(L$r)  
+  #g_ratio < 1  = regular and g_ratio > 1 = cluster
   
   # Non-graphical tests
   alpha <- 1/(99+1) # so the threshold value is 0.01
@@ -218,21 +224,22 @@ for (indice in 1:nrow(data_PPP_2025)){
   
   data_PPP_2025$L_area_dif[indice] <- L_dif
   data_PPP_2025$g_area_dif [indice] <- g_dif
+  data_PPP_2025$g_ratio [indice] <- g_ratio
   data_PPP_2025$MAD_test [indice] <- mad
   data_PPP_2025$DCLF_test [indice] <- dclf
 }
-rm(indice,stn,stn_position,stn_abun,win,X,L,g,L_dif,g_dif,mad,dclf)
+rm(indice,stn,stn_position,stn_abun,win,X,L,g,L_dif,g_dif,g_ratio,mad,dclf)
 
 #####
-saveRDS(data_PPP_2025,
-        paste(here(),
-              "/via3_data_exploration/Data/processed/data_PPP_2025.rds",
-              sep=""))
-
-data_PPP_2025 <- readRDS(paste(
-  here(),"/via3_data_exploration/Data/processed/data_PPP_2025.rds",
-  sep=""))
-row.names(data_PPP_2025) <- data_PPP_2025$station
+#saveRDS(data_PPP_2025,
+#        paste(here(),
+#              "/via3_data_exploration/Data/processed/data_PPP_2025.rds",
+#              sep=""))
+#
+#data_PPP_2025 <- readRDS(paste(
+#  here(),"/via3_data_exploration/Data/processed/data_PPP_2025.rds",
+#  sep=""))
+#row.names(data_PPP_2025) <- data_PPP_2025$station
 
 # visualize PPP ####
 stn_test <- data_position %>% filter(station==stn)
@@ -443,7 +450,7 @@ for (indice in 1:nrow(data_PPP_2025)){
   X <- ppp(st_coordinates(stn_position)[,1],
            st_coordinates(stn_position)[,2], window = win)
   
-  list_PPP[[indice]] <- X
+  list_PPP[[as.character(stn)]] <- X
 
   #Hopkins-Skellam index
   hopkins_index <- hopskel(X)
@@ -487,6 +494,7 @@ saveRDS(data_PPP_2025,
 data_PPP_2025 <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/data_PPP_2025.rds",
   sep=""))
+row.names(data_PPP_2025) <- data_PPP_2025$station
 
 #acp to try to create category of ppp ####
 x <- as.data.frame(data_PPP_2025) %>% 
@@ -540,8 +548,9 @@ ggplot(data = data_position %>% filter(station %in% group3))+
 #############
 #Summary of all PPP
 #############
+# ACP with the intensity ####
 x <- as.data.frame(data_PPP_2025) %>% 
-  select(intensity, L_area_dif, g_area_dif, MAD_test,
+  dplyr::select(intensity, L_area_dif, g_area_dif,g_ratio, MAD_test,
          DCLF_test,hopkins_index,J_area_dif,J_area_percent)
 row.names(x) <- data_PPP_2025$station
 acp1 <- prcomp(x,  scale = F)
@@ -550,10 +559,6 @@ plot(acp1)
 
 acp3 = FactoMineR::PCA(x,scale.unit=F, ncp=5, graph=F)
 acp3
-fviz_pca_ind(acp3,
-             addEllipses = TRUE,      # Add ellipses for categories
-             repel = TRUE,            # Avoid label overlap
-             title = "PCA with Categories")
 fviz_pca_biplot(acp3,
                 addEllipses = T,      # Add ellipses for categories
                 repel = F,            # Avoid label overlap
@@ -571,9 +576,42 @@ fviz_pca_var(acp3, col.var = "cos2",
              gradient.cols = c("black", "orange", "green"),
              repel = TRUE)
 
+# Hierarchical clustering ##
+
+distance_matrix <- dist(x)
+cluster_result <- hclust(distance_matrix, method = "ward.D2")
+nb_cluster <- 5
+plot(cluster_result, main = "Dendrogramme des processus")
+rect.hclust(cluster_result, k = nb_cluster, border = 2:4) 
+
+# Visualize clusters
+x$cluster <- cutree(cluster_result, k = nb_cluster)
+ggplot(x, aes(x = g_ratio, y = hopkins_index, color = factor(cluster))) +
+  geom_point() +
+  labs(title = "Clustering des processus par intensité et distance moyenne")
+
+# Visualize PPP per clusters
+x$id <- row.names(x)
+gplot <- list()
+for (indice in sort(unique(x$cluster))){
+  dta.temp <-  x %>% filter(cluster == indice)
+  nrow <- 4-indice
+  if(nrow==0){nrow=1}
+  g<- ggplot(data = data_position %>% filter(station %in% dta.temp$id))+
+    geom_point(aes(x=X,y=Y))+
+    facet_wrap(~station, nrow = nrow,scales="free_y")+
+    ylab("")
+  gplot[[indice]] <- g
+}
+gplot[[1]]
+gplot[[2]]
+gplot[[3]]
+gplot[[4]]
+
+
 # ACP without the intensity but just test of spacing and correlation ####
 x <- as.data.frame(data_PPP_2025) %>% 
-  select(L_area_dif, g_area_dif, MAD_test,
+  dplyr::select(L_area_dif, g_area_dif,g_ratio, MAD_test,
          DCLF_test,hopkins_index,J_area_dif,J_area_percent)
 row.names(x) <- data_PPP_2025$station
 acp1 <- prcomp(x,  scale = F)
@@ -582,10 +620,10 @@ plot(acp1)
 
 acp3 = FactoMineR::PCA(x,scale.unit=F, ncp=5, graph=F)
 acp3
-fviz_pca_ind(acp3,
-             addEllipses = TRUE,      # Add ellipses for categories
-             repel = TRUE,            # Avoid label overlap
-             title = "PCA with Categories")
+#fviz_pca_ind(acp3,
+#             addEllipses = TRUE,      # Add ellipses for categories
+#             repel = TRUE,            # Avoid label overlap
+#             title = "PCA with Categories")
 fviz_pca_biplot(acp3,
                 addEllipses = T,      # Add ellipses for categories
                 repel = F,            # Avoid label overlap
@@ -607,7 +645,7 @@ fviz_pca_var(acp3, col.var = "cos2",
 
 # acp correlation
 x <- as.data.frame(data_PPP_2025) %>% 
-  select(L_area_dif, g_area_dif, MAD_test,
+  dplyr::select(L_area_dif, g_area_dif,g_ratio, MAD_test,
          DCLF_test)
 row.names(x) <- data_PPP_2025$station
 
@@ -619,9 +657,15 @@ fviz_pca_biplot(acp3,
   theme() +
   labs(title = "Customized PCA Biplot")
 
+ggplot(data = data_position %>% filter(station %in% c(157,123,183,155,
+                                                      174,104,127)))+
+  geom_point(aes(x=X,y=Y))+
+  facet_wrap(~station, nrow = 1,scales="free_y")+
+  ylab("")
+
 # acp spacing
 x <- as.data.frame(data_PPP_2025) %>% 
-  select(hopkins_index,J_area_dif,J_area_percent)
+  dplyr::select(hopkins_index,J_area_dif,J_area_percent)
 row.names(x) <- data_PPP_2025$station
 
 acp3 = FactoMineR::PCA(x,scale.unit=F, ncp=5, graph=F)
@@ -631,6 +675,25 @@ fviz_pca_biplot(acp3,
                 title = "PCA Biplot")+
   theme() +
   labs(title = "Customized PCA Biplot")
+
+
+# Hierarchical clustering ####
+x <- as.data.frame(data_PPP_2025) %>% 
+  dplyr::select(L_area_dif, g_area_dif,g_ratio, MAD_test,
+         DCLF_test,hopkins_index,J_area_dif,J_area_percent)
+row.names(x) <- data_PPP_2025$station
+
+distance_matrix <- dist(x)
+cluster_result <- hclust(distance_matrix, method = "ward.D2")
+nb_cluster <- 5
+plot(cluster_result, main = "Dendrogramme des processus")
+rect.hclust(cluster_result, k = nb_cluster, border = 2:4) 
+
+# Visualize clusters
+x$cluster <- cutree(cluster_result, k = nb_cluster)
+ggplot(x, aes(x = g_ratio, y = hopkins_index, color = factor(cluster))) +
+  geom_point() +
+  labs(title = "Clustering des processus par intensité et distance moyenne")
 
 # plot the PPP ####
 ggplot(data = data_position)+
@@ -647,10 +710,31 @@ for (indice in 1:nrow(data_test)){
 }
 rm(indice,stn)
 
+data_test <- data_test %>% filter(PPP_intensity != 0)
+
 ggplot(data = data_test)+
   geom_point(aes(x=X,y=Y))+
-  facet_wrap(~PPP_intensity*station, nrow = 4,scales="free_y")+
+  facet_wrap(~round(PPP_intensity,digits=3)*station, nrow = 4,scales="free_y")+
   ylab("")
+
+# use the different params to class the PPP ####
+stn_regular <- data_PPP_2025 %>% 
+  filter(hopkins_index > 1.1) %>%
+  filter(g_ratio < 0.7)
+
+stn_cluster <- data_PPP_2025 %>% 
+  filter(hopkins_index < 0.9) %>%
+  filter(g_ratio > 1.5) 
+
+stn_poisson <- data_PPP_2025 %>% 
+  filter(g_area_dif > -0.5) %>%
+  filter(g_area_dif < 0.5) %>%
+  filter(g_ratio > 0.7) %>%
+  filter(g_ratio < 1.3) %>%
+  filter(L_area_dif > -0.1) %>%
+  filter(L_area_dif < 0.1) %>%
+  filter(hopkins_index > 0.9)%>%
+  filter(hopkins_index < 1.1)
 
 #####
 
@@ -662,3 +746,52 @@ saveRDS(list_PPP,
 list_PPP <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/list_PPP_tuyau_2025.rds",
   sep=""))
+
+
+#######
+# Compare the process between each other
+#######
+# Extract intensity (lambda) for each process
+intensites <- rep(0, length(list_PPP))
+for (indice in 1:length(list_PPP)){
+  ppp <- list_PPP[[indice]]
+  intensites[indice] <- intensity(ppp)
+}
+
+# Test ANOVA to compare intensity
+anova_result <- anova(lm(intensites ~ 1))
+print(anova_result)
+
+# If the intensities differ significantly, perform clustering.
+# Calculate other statistics (e.g. average distance to nearest neighbours)
+distances_moyennes <- rep(0, length(list_PPP))
+for (indice in 1:length(list_PPP)){
+  ppp <- list_PPP[[indice]]
+  distances_moyennes[indice] <- mean(nndist(ppp))
+}
+
+# Create a statistics table
+stats_processus <- data.frame(
+  processus_id = as.numeric(names(list_PPP)),
+  intensite = intensites,
+  distance_moyenne = distances_moyennes
+)
+
+# Hierarchical clustering
+distance_matrix <- dist(stats_processus[, -1])
+cluster_result <- hclust(distance_matrix, method = "ward.D2")
+plot(cluster_result, main = "Dendrogramme des processus")
+rect.hclust(cluster_result, k = 3, border = 2:4)  # Exemple avec 3 clusters
+
+# Visualize clusters
+stats_processus$cluster <- cutree(cluster_result, k = 3)
+ggplot(stats_processus, aes(x = intensite, y = distance_moyenne, color = factor(cluster))) +
+  geom_point() +
+  labs(title = "Clustering des processus par intensité et distance moyenne")
+
+
+#######
+# Analyse the spatial structure with variograms
+#######
+
+#Count Variogram

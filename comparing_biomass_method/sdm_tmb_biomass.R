@@ -9,6 +9,7 @@ library(tweedie)
 library(ggspatial)
 library(sdmTMB)
 library(INLA)
+library(fitdistrplus)
 
 
 #########################
@@ -226,7 +227,18 @@ plot(mesh$mesh, main = NA, edge.color = "grey60", asp = 1)
 points(dat$long, dat$lat, pch = 19, col = "red",cex = 0.3)
 
 
-## Then fit the model 
+## Then fit the model
+#test distribution with fidistrplus
+fw <- fitdist(data_abun$intensity, "weibull")
+fg <- fitdist(data_abun$intensity, "gamma")
+fln <- fitdist(data_abun$intensity, "lnorm")
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+plot.legend <- c("Weibull", "lognormal", "gamma")
+denscomp(list(fw, fln, fg), legendtext = plot.legend)
+qqcomp(list(fw, fln, fg), legendtext = plot.legend)
+cdfcomp(list(fw, fln, fg), legendtext = plot.legend)
+ppcomp(list(fw, fln, fg), legendtext = plot.legend)
+
 fit1 <- sdmTMB(
   intensity ~ 1,
   data = dat,
