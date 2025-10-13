@@ -13,6 +13,8 @@ library(ggplot2)
 library(ggspatial)
 library(FactoMineR)
 library(factoextra)
+library(cluster)
+library(NbClust)
 
 #############
 #load data
@@ -553,9 +555,9 @@ x <- as.data.frame(data_PPP_2025) %>%
   dplyr::select(intensity, L_area_dif, g_area_dif,g_ratio, MAD_test,
          DCLF_test,hopkins_index,J_area_dif,J_area_percent)
 row.names(x) <- data_PPP_2025$station
-acp1 <- prcomp(x,  scale = F)
-acp1
-plot(acp1)
+#acp1 <- prcomp(x,  scale = F)
+#acp1
+#plot(acp1)
 
 acp3 = FactoMineR::PCA(x,scale.unit=F, ncp=5, graph=F)
 acp3
@@ -576,27 +578,106 @@ fviz_pca_var(acp3, col.var = "cos2",
              gradient.cols = c("black", "orange", "green"),
              repel = TRUE)
 
-# Hierarchical clustering ##
+# Hierarchical clustering ####
 
-distance_matrix <- dist(x)
+### Scale the data
+x_sc <- as.data.frame(scale(x))
+
+distance_matrix <- dist(x_sc)
 cluster_result <- hclust(distance_matrix, method = "ward.D2")
-nb_cluster <- 5
-plot(cluster_result, main = "Dendrogramme des processus")
+
+### be careful of highly correlated variables
+#### Calculate correlation matrix
+cor_matrix <- cor(x_sc)
+####  Find highly correlated pairs (e.g., |cor| > 0.9)
+high_cor <- which(abs(cor_matrix) > 0.9 & cor_matrix < 1, arr.ind = TRUE)
+####  Remove one variable from each highly correlated pair
+x_sc <- x_sc[, -unique(high_cor[,2])[c(1,3)]]
+
+# Determine the Optimal Number of Clusters
+### Example code for elbow method
+### Plot WSS for different k and look for the "elbow" point
+wss <- sapply(1:20, function(k) {
+  km <- kmeans(x_sc, centers = k, nstart = 10)
+  km$tot.withinss
+})
+plot(1:20, wss, type = "b", xlab = "Number of Clusters",
+     ylab = "Within-cluster Sum of Squares")
+#### First differences
+first_diff <- diff(wss)
+#### Second differences
+second_diff <- diff(first_diff)
+#### Optimal k: where second_diff is maximized
+optimal_k_wss <- which.max(second_diff) + 2  # +2 because of diff offset
+print(paste("Optimal k (WSS):", optimal_k_wss))
+
+
+### Example code for silhouette method
+### Maximize the average silhouette width.
+silhouette_scores <- sapply(2:20, function(k) {
+  km <- kmeans(x_sc, centers = k, nstart = 10)
+  sil <- silhouette(km$cluster, dist(x_sc))
+  mean(sil[, "sil_width"])
+})
+plot(2:20, silhouette_scores, type = "b", xlab = "Number of Clusters",
+     ylab = "Average Silhouette Width")
+#### Optimal k: where silhouette score is maximized
+optimal_k_silhouette <- which.max(
+  silhouette_scores)+1 #+1 because sapply starts at 2
+print(paste("Optimal k (Silhouette):", optimal_k_silhouette))
+
+### Example code for gap statistic
+### Compare WSS to a null reference distribution
+### The optimal number of clusters is the smallest k such that Gap(k)≥Gap(k+1)−sk+1
+gap_stat <- clusGap(x_sc, FUN = kmeans, K.max = 20, B = 50)
+plot(gap_stat)
+#### Optimal k: where Gap(k)≥Gap(k+1)−sk+1
+optimal_k_gap <- maxSE(gap_stat$Tab[, "gap"], gap_stat$Tab[, "SE.sim"])
+print(paste("Optimal k (Gap Statistic):",
+            as.numeric(optimal_k_gap)))
+
+### Example code for NbClust
+### Uses 30 indices to suggest the best number of clusters
+
+index <- c("kl", "ch", "hartigan",
+           "gap","dunn","pseudot2","duda")
+nbclust_result <- list()
+nbclust_best.nc <- c()
+for (i in 1:length(index)){
+  nbclust_result[[index[i]]] <- NbClust(x_sc, distance = "euclidean", min.nc = 2,
+                          max.nc = 20, method = "ward.D2",
+                          index = index[i])
+  nbclust_best.nc <- c(nbclust_best.nc,
+                       nbclust_result[[index[i]]][["Best.nc"]][1])
+}
+index <- c(index, "wss", "silhouette")
+nbclust_best.nc <- c(nbclust_best.nc, optimal_k_wss, optimal_k_silhouette)
+nbclust_data <- data.frame(index,nbclust_best.nc)
+
+
+nb_cluster <- 3 #or 4
+plot(cluster_result, main = "Dendrogramme of processes")
 rect.hclust(cluster_result, k = nb_cluster, border = 2:4) 
 
 # Visualize clusters
 x$cluster <- cutree(cluster_result, k = nb_cluster)
-ggplot(x, aes(x = g_ratio, y = hopkins_index, color = factor(cluster))) +
+x_sc$cluster <- cutree(cluster_result, k = nb_cluster)
+ggplot(x, aes(x = intensity, y = g_ratio, color = factor(cluster))) +
   geom_point() +
   labs(title = "Clustering des processus par intensité et distance moyenne")
+
+# Summarize and explore the characteristic of each cluster
+summary(x %>% filter(cluster == 1))
+summary(x %>% filter(cluster == 2))
+summary(x %>% filter(cluster == 3))
 
 # Visualize PPP per clusters
 x$id <- row.names(x)
 gplot <- list()
 for (indice in sort(unique(x$cluster))){
   dta.temp <-  x %>% filter(cluster == indice)
-  nrow <- 4-indice
-  if(nrow==0){nrow=1}
+  nrow <- 1
+  if(nrow(dta.temp)>10){nrow=2}
   g<- ggplot(data = data_position %>% filter(station %in% dta.temp$id))+
     geom_point(aes(x=X,y=Y))+
     facet_wrap(~station, nrow = nrow,scales="free_y")+
@@ -606,7 +687,30 @@ for (indice in sort(unique(x$cluster))){
 gplot[[1]]
 gplot[[2]]
 gplot[[3]]
-gplot[[4]]
+#gplot[[4]]
+#gplot[[5]]
+#gplot[[6]]
+#gplot[[7]]
+#gplot[[8]]
+#gplot[[9]]
+#gplot[[10]]
+
+example_cluster <- data.frame(station=0,cluster=sort(unique(x$cluster)))
+for (indice in sort(unique(x$cluster))){
+  dta.temp <-  x %>% filter(cluster == indice)
+  stn <- sample(dta.temp$id,1)
+  example_cluster$stn[indice] <- stn
+}
+
+x.position <- data_position %>% filter(station %in% example_cluster$stn)
+x.position <- merge(x.position,example_cluster)
+
+ggplot(data = x.position)+
+  geom_point(aes(x=X,y=Y))+
+  facet_wrap(~cluster*station, nrow = nrow,scales="free_y")+
+  ylab("")+
+  ggtitle("Example of point process per cluster identified by explanatory analysis")
+
 
 
 # ACP without the intensity but just test of spacing and correlation ####

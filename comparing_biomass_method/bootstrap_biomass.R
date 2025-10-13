@@ -118,6 +118,29 @@ data_abun <- readRDS(
 shp_grid <-readRDS(
   paste(here(),"/point_process/Output/shp_grid.rds", sep=""))
 
+# show the raw density map 
+
+ggplot()+
+  geom_point(data = data_abun,
+             aes(x = X, y = Y, size = intensity))+
+  theme(title = element_text(color = "black",face = "bold"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "lightblue"),
+        legend.background = element_rect(fill = "white"),
+        legend.key = element_rect(fill = "white", color = NA),
+        legend.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+        legend.text = element_text(size = 6),
+        legend.title = element_text(size = 7),
+        plot.margin = margin(t = 10,  # Top margin
+                             r = 0,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0), # Left margin
+        legend.key.size = unit(.3, "cm"))+
+  annotation_scale(location = "bl", line_width = .3) +
+  annotation_north_arrow(location = "tr", height = unit(0.5, "cm"),
+                         width = unit(0.5, "cm")) +
+  theme()
+
 # param for real data
 champVision <- 1.5/1000 # (in kilometer)
 
