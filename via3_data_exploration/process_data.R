@@ -385,7 +385,7 @@ data_abun_2025 <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/data_abun_2025.rds",
   sep=""))
 
-#add start tim and start distance at the summary of the annotation
+#add start time and start distance at the summary of the annotation
 count_tot$time_start <- as.POSIXlt(count_tot$Start, format = "%H:%M:%S")
 count_tot$time_start <- count_tot$time_start$min*60 +count_tot$time_start$sec
 #calculate the start of the video in meter

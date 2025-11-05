@@ -199,3 +199,16 @@ ggplot()+
   geom_sf(data = obs, aes(color=value))+
   geom_sf(data = zee, color = "royalblue", fill = "#fcfbfdAA" )+
   theme_bw()
+
+
+# create the polygon of the tuyau study area
+poly_tuyau <- data.frame(WGSPMX = c(557407,566667), WGSPMY = c(5077675,5023967))
+poly_tuyau <- poly_tuyau %>% 
+  st_as_sf(coords = c("WGSPMX", "WGSPMY"), 
+           crs = 4467) %>% 
+  st_bbox() %>% 
+  st_as_sfc() %>%
+  st_sf()
+#st_area(poly_tuyau) # calculate the area of the polygon
+#saveRDS(poly_tuyau,
+#  "C:/Users/ahebertb/Documents/sea-cucumbeR/SIG/SIG_Data/study_cacul_area.rds")

@@ -95,6 +95,11 @@ ggplot() +
   labs(title = "Curve: (Q - Q(T)) / Q",
        x = "T", y = "(Q-Q(T))/Q")
 
+# Calculate the patches and represent them by color.
+centers = cg$getPatches("intensity", 500000, 10)
+ggplot(as.data.frame(dat[])) + 
+  geom_point(aes(x=X,y=Y, size = intensity, color = as.factor(Patch)))
+
 ## calculate influence area ####
 # Calculer le diagramme de Voronoï
 library(deldir)
