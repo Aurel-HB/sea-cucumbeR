@@ -20,7 +20,7 @@ surfsquare <- 1.852*1.852 # in kilometer square
 
 
 ## Prepare data ####
-datcsv <- as.data.frame(data_abun %>% select(X,Y,intensity))
+datcsv <- as.data.frame(data_abun)%>% select(X,Y,intensity)
 datcsv$intensity <- datcsv$intensity*mean_weight #intensity in kg/m²
 filecsv <- "Density_2025.csv"
 write.csv(datcsv,
