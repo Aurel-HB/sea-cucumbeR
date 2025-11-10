@@ -211,4 +211,4 @@ poly_tuyau <- poly_tuyau %>%
   st_sf()
 #st_area(poly_tuyau) # calculate the area of the polygon
 #saveRDS(poly_tuyau,
-#  "C:/Users/ahebertb/Documents/sea-cucumbeR/SIG/SIG_Data/study_cacul_area.rds")
+# "C:/Users/ahebertb/Documents/sea-cucumbeR/SIG/SIG_Data/study_calcul_area.rds")

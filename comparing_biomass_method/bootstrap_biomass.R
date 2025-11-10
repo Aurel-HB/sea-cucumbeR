@@ -118,11 +118,16 @@ data_abun <- readRDS(
 shp_grid <-readRDS(
   paste(here(),"/point_process/Output/shp_grid.rds", sep=""))
 
+# import the area for calculate the total abundance
+calcul_area <- readRDS(paste(here(),
+                             "/SIG/SIG_Data/study_calcul_area.rds",sep=""))
+
 # show the raw density map 
 
 ggplot()+
   geom_point(data = data_abun,
              aes(x = X, y = Y, size = intensity))+
+  geom_sf(data = calcul_area, fill = "#00990033")+
   theme(title = element_text(color = "black",face = "bold"),
         panel.border = element_blank(),
         panel.background = element_rect(fill = "lightblue"),
@@ -179,13 +184,17 @@ dat$Abun_square <- dat$intensity*surfsquare
 dat$bioAdult <- dat$density*surfsquare/1000
 ## total biomass of the stock
 bio_stock <- mean(dat$bioAdult)*length(grid$long)
+# or using the interest area polygon
+bio_stock <- (mean(dat$density)/1000)*as.numeric(
+  st_area(calcul_area)/1e+6
+)
 ## --------------------------------------------------------
 
 
 ## Estimation of sampling variances ####
 ### Variances with bootstrap
 # N = number of replica to define
-N <- 10000
+N <- 1000
 
 # function to calculate the total biomass
 bio_tot <- function(donnees, indices) {
@@ -194,10 +203,19 @@ bio_tot <- function(donnees, indices) {
     length(dat$abun) # sampling on the grid 
   return(biomasse_totale)
 }
+# or using the interest area polygon
+bio_totale <- function(donnees, indices) {
+  biomasse_carre <- donnees[indices]/1000  # convert in ton
+  biomasse_totale <- (mean(biomasse_carre))*as.numeric(
+    st_area(calcul_area)/1e+6)
+  return(biomasse_totale)
+}
 
 # execute the bootstrap
 set.seed(2025) # for reproducibility
 bootobject <- boot(data = dat$bioAdult, statistic = bio_tot, R = N)
+# or using the interest area polygon
+bootobject <- boot(data = dat$density, statistic = bio_totale, R = N)
 
 ## FIGURE : ABUNDANCE ADULTS
 # used statistics
