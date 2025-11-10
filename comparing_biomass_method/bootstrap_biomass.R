@@ -215,6 +215,7 @@ bio_totale <- function(donnees, indices) {
 set.seed(2025) # for reproducibility
 bootobject <- boot(data = dat$bioAdult, statistic = bio_tot, R = N)
 # or using the interest area polygon
+set.seed(557407)
 bootobject <- boot(data = dat$density, statistic = bio_totale, R = N)
 
 ## FIGURE : ABUNDANCE ADULTS

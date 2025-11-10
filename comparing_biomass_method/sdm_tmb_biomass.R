@@ -9,7 +9,7 @@ library(tweedie)
 library(ggspatial)
 library(sdmTMB)
 library(INLA)
-library(fitdistrplus)
+#library(fitdistrplus)
 
 
 #########################
@@ -180,6 +180,11 @@ data_abun <- readRDS(
 shp_grid <-readRDS(
   paste(here(),"/point_process/Output/shp_grid.rds", sep=""))
 
+# import the area for calculate the total abundance
+calcul_area <- readRDS(paste(here(),
+                             "/SIG/SIG_Data/study_calcul_area.rds",sep=""))
+surfarea <- as.numeric(st_area(calcul_area)/1e+6)
+
 mean_weight <- 0.4 # weight of an adult sea cucumber in kg
 surfsquare <- 1.852*1.852 # in kilometer square
 
@@ -207,14 +212,21 @@ grid <- shp_grid %>%
 
 plot(grid)
 
+# use the study area polygon to generate a extrapolation grid
+coordinate <- as.data.frame(calcul_area[[1]][[1]][[1]])/1000
+names(coordinate) <- c("X","Y")
+res <- 0.5
+grid <- expand.grid(
+  long = seq(min(coordinate$X), max(coordinate$X), by = res),
+  lat = seq(min(coordinate$Y), max(coordinate$Y), by = res)
+)
+plot(grid)
 
 ## Create mesh with inla
-
 bnd <- INLA::inla.nonconvex.hull(cbind(dat$long, dat$lat),
                                  convex = -0.03)
 bnd2 = INLA::inla.nonconvex.hull(cbind(dat$long, dat$lat),
                                  convex = -0.15)
-
 mesh_inla <- INLA::inla.mesh.2d(
   loc = as.matrix(data.frame(dat$long, dat$lat)),
   boundary = list(bnd,bnd2),
@@ -226,6 +238,22 @@ mesh <- make_mesh(as.data.frame(dat), c("long", "lat"), mesh = mesh_inla)
 plot(mesh$mesh, main = NA, edge.color = "grey60", asp = 1)
 points(dat$long, dat$lat, pch = 19, col = "red",cex = 0.3)
 
+#using the polygon of the area
+bnd <- INLA::inla.nonconvex.hull(cbind(grid$long, grid$lat),
+                                 convex = -0.04)
+bnd2 = INLA::inla.nonconvex.hull(cbind(grid$long, grid$lat),
+                                 convex = -0.15)
+
+mesh_inla <- INLA::inla.mesh.2d(
+  loc = as.matrix(grid),
+  boundary = list(bnd,bnd2),
+  cutoff = 3, # minimum triangle edge length
+  max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
+) # 1.852 is the distance in meter of a mile nautic
+mesh <- make_mesh(as.data.frame(dat), c("long", "lat"), mesh = mesh_inla)
+
+plot(mesh$mesh, main = NA, edge.color = "grey60", asp = 1)
+points(dat$long, dat$lat, pch = 19, col = "red",cex = 0.3)
 
 ## Then fit the model
 #test distribution with fidistrplus
@@ -252,6 +280,12 @@ fit2 <- sdmTMB(
   mesh = mesh,
   family = Gamma(link = "inverse"),
   spatial = "on")
+#check the result
+summary(fit1)
+sanity(fit1)
+
+summary(fit2)
+sanity(fit2)
 
 #abundance density
 fit <- sdmTMB(
@@ -270,8 +304,6 @@ fit <- sdmTMB(
   spatial = "on")
 
 ## check the result ##
-summary(fit1)
-sanity(fit1)# the model have several issues so try with another  
 
 summary(fit)
 sanity(fit)
@@ -310,7 +342,7 @@ ggplot(p, aes(long, lat, fill = exp(est))) +
 
 # Get the index of the area
 p_sdm <- predict(fit, newdata = grid, return_tmb_object = TRUE)
-index <- get_index(p_sdm, area = surfsquare, bias_correct = TRUE)
+index <- get_index(p_sdm, area = res^2, bias_correct = TRUE)
 ggplot(index, aes(type, est)) +
   geom_point(colour = "grey30")+
   geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2)+
@@ -337,8 +369,8 @@ TAC_mod <- (1.5/100)*(index$lwr*mean_weight/1000)
 res <- 0.05 # resolution in km
 
 grid <- expand.grid(
-  long = seq(min(dat$long), max(dat$long), by = res),
-  lat = seq(min(dat$lat), max(dat$lat), by = res)
+  long = seq(min(coordinate$X), max(coordinate$X), by = res),
+  lat = seq(min(coordinate$Y), max(coordinate$Y), by = res)
 )
 
 # plot the random spatial effects
