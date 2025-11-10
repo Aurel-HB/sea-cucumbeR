@@ -66,7 +66,7 @@ bio_stock <- mean(dat$bioAdult)*length(grid$long)
 ## Estimation of sampling variances ####
 ### Variances with bootstrap
 # N = number of replica to define
-N <- 10000
+N <- 1000
 
 # function to calculate the total biomass
 bio_tot <- function(donnees, indices) {
