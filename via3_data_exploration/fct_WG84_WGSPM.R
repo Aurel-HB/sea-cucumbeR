@@ -12,19 +12,10 @@
 #'
 
 transfo_WG84_WGSPM = function(data,
-                              src.proj = CRS("+init=epsg:4326"),
-                              dst.proj = CRS("+init=epsg:4467")) {
-  require(sp)
+                              src.proj = 4326,
+                              dst.proj = 4467) {
+  require(sf)
   #data is the shape (id,lon,lat) in this order
-  names(data) <- c("id","lon","lat")
-  as.data.frame(
-    spTransform(
-      SpatialPointsDataFrame(
-        coords = data.frame(Xbng = data$lon,
-                            Ybng = data$lat),
-        data = data.frame(id = data$id,
-                          Xlon = data$lon,
-                          Ylat = data$lat),
-        proj4string = src.proj), dst.proj))
-  
+  names(data) <- c("id","x","y")
+  sf_transform_xy(data, dst.proj, src.proj)
 }
