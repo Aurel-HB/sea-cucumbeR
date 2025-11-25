@@ -50,14 +50,10 @@ df_sf$time <- as.factor(substr(df_sf$time, start = 1, stop = 10))
 
 
 #grid ##
-# filter the square that are in the tuyau sampling zone
-poly <- data.frame(WGSPMX = c(546295,566667), WGSPMY = c(5077670,5025800))
-poly <- poly %>% 
-  st_as_sf(coords = c("WGSPMX", "WGSPMY"), 
-           crs = 4467) %>% 
-  st_bbox() %>% 
-  st_as_sfc() %>%
-  st_sf()
+# filter the square that are in the sampling zone
+poly <- readRDS(
+  paste(here(),"/SIG/SIG_Data/study_calcul_area.rds",sep="")
+)
 sf_sampling_grid <- st_filter(sf_sampling_grid, poly)
 sf_sampling_grid <- sf_sampling_grid %>% 
   select(Echantillo,Id,color_sampling,geometry)
@@ -102,7 +98,7 @@ for (i in 1:nrow(sf_final)){
 }
 rm(i,stn, data)
 
-# check on a map 
+# check on a map ####
 maps <- ggplot()+
   scale_fill_manual(
     name = paste("Plan d'échantillonnage",2025,sep = " "),
@@ -140,3 +136,32 @@ maps <- ggplot()+
   theme()
 
 maps
+
+# the station is a artifact due to some track point of the station 163
+sf_final$X.track[92] <- NA
+sf_final$Y.track[92] <- NA
+# due to a wrong manipulation the tracks of the station 144 have disparate
+# start (564521.7,5059426) and stop (564620.4,5060177)
+sf_final$X.track[74] <- mean(c(564521.7,564620.4))
+sf_final$Y.track[74] <- mean(c(5059426,5060177))
+
+# export ####
+#sf_final <- data.frame(sf_final)
+#sf_final$geometry <- as.character(sf_final$geometry)
+#
+#st_write(sf_final %>%
+#           select(Station,Echantillo,X.track, Y.track, geometry),
+#         paste(here(),"/SIG/SIG_data/centroid_tracks.csv", sep=""),
+#         append=FALSE)#,
+#         #layer_options = "GEOMETRY=AS_XY")
+
+sf_final <- sf_final %>%
+  select(Station,X.track, Y.track, geometry)%>%
+  filter(!is.na(X.track)) %>%
+  st_centroid() %>%
+  mutate(X.centroid_station = st_coordinates(.)[,1]) %>%
+  mutate(Y.centroid_station = st_coordinates(.)[,2])
+
+st_write(sf_final,
+         paste(here(),"/SIG/SIG_data/centroid_tracks.csv", sep=""),
+         append=FALSE)
