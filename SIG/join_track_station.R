@@ -98,6 +98,15 @@ for (i in 1:nrow(sf_final)){
 }
 rm(i,stn, data)
 
+# correct the information ####
+# the station is a artifact due to some track point of the station 163
+sf_final$X.track[92] <- NA
+sf_final$Y.track[92] <- NA
+# due to a wrong manipulation, we don't have the tracks of the station 144
+# but we have the start (564521.7,5059426) and stop (564620.4,5060177) of the sample
+sf_final$X.track[74] <- mean(c(564521.7,564620.4))
+sf_final$Y.track[74] <- mean(c(5059426,5060177))
+
 # check on a map ####
 maps <- ggplot()+
   scale_fill_manual(
@@ -137,13 +146,15 @@ maps <- ggplot()+
 
 maps
 
-# the station is a artifact due to some track point of the station 163
-sf_final$X.track[92] <- NA
-sf_final$Y.track[92] <- NA
-# due to a wrong manipulation the tracks of the station 144 have disparate
-# start (564521.7,5059426) and stop (564620.4,5060177)
-sf_final$X.track[74] <- mean(c(564521.7,564620.4))
-sf_final$Y.track[74] <- mean(c(5059426,5060177))
+# and the station of the boite à pétoncle have to add ####
+# if wanted but all the analysis will most only on the tuyau area
+# we just have the stop and start of the each sample
+bap <- data.frame(NA,NA,NA,NA,NA,NA)
+names(bap) <- names(sf_final)
+# 43B : start (516757.7, 5165033) and stop (517131.6,5164992)
+# 50B : start (518338.1,5165069) and stop (518842.0,5165037)
+# 57B : start (519837.6,5163713) and stop (520073.7,5163310)
+
 
 # export ####
 #sf_final <- data.frame(sf_final)
