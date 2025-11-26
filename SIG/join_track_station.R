@@ -146,15 +146,47 @@ maps <- ggplot()+
 
 maps
 
+# lay out the final shape of the sf tuyau area ####
+sf_final <- sf_final %>%
+  select(Station,X.track, Y.track, geometry)%>%
+  filter(!is.na(X.track)) %>%
+  st_centroid() %>%
+  mutate(X.centroid_station = st_coordinates(.)[,1]) %>%
+  mutate(Y.centroid_station = st_coordinates(.)[,2])
+
+
 # and the station of the boite à pétoncle have to add ####
 # if wanted but all the analysis will most only on the tuyau area
+bap_grid <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""),
+                    layer = "grille_boite_petoncle_rectangle")
+bap_grid <- bap_grid %>% st_centroid() %>%
+  mutate(X.centroid_station = st_coordinates(.)[,1]) %>%
+  mutate(Y.centroid_station = st_coordinates(.)[,2]) %>%
+  filter(idbis %in% c("43B","50B","57B"))
 # we just have the stop and start of the each sample
-bap <- data.frame(NA,NA,NA,NA,NA,NA)
-names(bap) <- names(sf_final)
-# 43B : start (516757.7, 5165033) and stop (517131.6,5164992)
-# 50B : start (518338.1,5165069) and stop (518842.0,5165037)
-# 57B : start (519837.6,5163713) and stop (520073.7,5163310)
+bap <- data.frame(bap_grid$idbis,
+                  c(NA,NA,NA),
+                  c(NA,NA,NA),
+                  bap_grid$geometry)  %>%
+  st_as_sf()
+                  
+names(bap)[1:3] <- names(sf_final)[1:3]
 
+bap <- bap %>% 
+  mutate(X.centroid_station = bap_grid$X.centroid_station) %>%
+  mutate(Y.centroid_station = bap_grid$Y.centroid_station)
+
+# 43B : start (516757.7, 5165033) and stop (517131.6,5164992)
+bap$X.track[1] <- mean(c(516757.7,517131.6))
+bap$Y.track[1] <- mean(c(5165033,5164992))
+# 50B : start (518338.1,5165069) and stop (518842.0,5165037)
+bap$X.track[2] <- mean(c(518338.1,518842.0))
+bap$Y.track[2] <- mean(c(5165069,5165037))
+# 57B : start (519837.6,5163713) and stop (520073.7,5163310)
+bap$X.track[3] <- mean(c(519837.6,520073.7))
+bap$Y.track[3] <- mean(c(5163713,5163310))
+
+sf_final <- rbind(sf_final,bap)
 
 # export ####
 #sf_final <- data.frame(sf_final)
@@ -166,13 +198,6 @@ names(bap) <- names(sf_final)
 #         append=FALSE)#,
 #         #layer_options = "GEOMETRY=AS_XY")
 
-sf_final <- sf_final %>%
-  select(Station,X.track, Y.track, geometry)%>%
-  filter(!is.na(X.track)) %>%
-  st_centroid() %>%
-  mutate(X.centroid_station = st_coordinates(.)[,1]) %>%
-  mutate(Y.centroid_station = st_coordinates(.)[,2])
-
 st_write(sf_final,
          paste(here(),"/SIG/SIG_data/centroid_tracks.csv", sep=""),
-         append=FALSE)
+         append=FALSE)#,layer_options = "GEOMETRY=AS_XY")
