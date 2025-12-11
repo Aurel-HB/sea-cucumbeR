@@ -10,7 +10,7 @@ library(ggplot2)
 
 #open a netCDF file 
 ncin <- nc_open(paste(here(),
-          "/environment_exploration/Environment_Data/cmems_mod_glo_phy_my_0.083deg.nc",
+          "/environment_exploration/Environment_Data/row/cmems_mod_glo_phy_my_0.083deg.nc",
           sep=""))
 print(ncin)
 
@@ -109,7 +109,7 @@ head(na.omit(tmp_df01), 10)
 
 # set path and filename
 csvpath <- paste(here(),
-                 "/environment_exploration/Environment_Data/",
+                 "/environment_exploration/Environment_Data/processed/",
                  sep="")
 csvname <- "cru_tmp_1.csv"
 csvfile <- paste(csvpath, csvname, sep="")
