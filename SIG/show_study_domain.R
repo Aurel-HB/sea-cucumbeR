@@ -212,3 +212,59 @@ poly_tuyau <- poly_tuyau %>%
 #st_area(poly_tuyau) # calculate the area of the polygon
 #saveRDS(poly_tuyau,
 # "C:/Users/ahebertb/Documents/sea-cucumbeR/SIG/SIG_Data/study_calcul_area.rds")
+
+# line that separate the zone 1 and the zone 2 of sea cucumber fishery 
+# legislation at Saint Pierre and Miquelon
+
+Point_A <- c("46°31ʹ19","56°47ʹ59")
+Point_B <- c("46°31ʹ15","56°28ʹ54")
+Point_C <- c("46°42ʹ03","56°28ʹ48")
+Point_D <- c("46°41ʹ19","55°55ʹ25")
+
+deg_dec <- function(coord){
+  # coords is the shape xx°xx°xxx 
+  dec <- as.numeric(substr(coord, start = 1, stop = 2))
+  min <- as.numeric(substr(coord, start = 4, stop = 5))/60
+  sec <- as.numeric(substr(coord, start = 7, stop = nchar(coord)))/3600
+  return(dec+min+sec)
+}
+
+delimitation <- data.frame(
+  Id = c("Point_A","Point_B","Point_C","Point_D"),
+  long = c(Point_A[2],Point_D[2],Point_C[2],Point_D[2]),
+  lat = c(Point_A[1],Point_D[1],Point_C[1],Point_D[1])
+)
+
+for (i in 1:nrow(delimitation)){
+  for (y in 2:ncol(delimitation)){
+    delimitation[i,y] <- deg_dec(delimitation[i,y])
+  }
+}
+delimitation$long <- (-1)*as.numeric(delimitation$long)
+delimitation$lat <- as.numeric(delimitation$lat)
+
+sf_delim <- delimitation %>% 
+  st_as_sf(coords = c("long", "lat"), 
+           crs = 4326)
+
+
+
+ggplot(zee)+
+  geom_sf(color = "royalblue", fill = "#78c679BB" )+
+  geom_sf(data=sf_delim)+
+  geom_line(data = delimitation, aes(x = long, y = lat))+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "#d0d1e6"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  coord_sf(xlim = c(-58,-54), ylim = c(43,48), expand = FALSE)+
+  xlab("")+ylab("")+
+  labs(title = "Banc de Saint Pierre et Zone d'étude du projet")+ 
+  theme()

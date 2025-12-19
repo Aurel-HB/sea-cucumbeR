@@ -3,9 +3,9 @@
 # (45.849N, 45.3656S, -56.1402E, -56.26W)
 
 # load the package
-library(ncdf4)
+#library(ncdf4)
 library(here)
-library(CFtime)
+#library(CFtime)
 library(lattice)
 library(RColorBrewer)
 library(sf)
@@ -22,7 +22,7 @@ calcul_area <- readRDS(paste(here(),
 #open a netCDF file 
 ncrast <- raster::stack(paste(here(),
                         "/environment_exploration/Environment_Data/row/",
-                        "cmems_mod_glo_phy_my_0.083deg_P1M-m_1765967013203.nc",
+                        "cmems_mod_glo_phy_my_0.083deg_P1M-m_BottomT.nc",
                         sep=""), varname = "bottomT")
   
 print(ncrast)
@@ -35,14 +35,16 @@ for (i in 1:dim(ncrast)[3]){
   months <- c("Jan","Feb","Mar","Apr","May",
               "Jun","Jul","Aug","Sep","Oct","Nov",
               "Dec")
-  month <- months[time_cf[i,2]]
-  name <- c(name,paste(month, time_cf[i,1],sep = "_"))
+  date <- ncrast@z[["Date/time"]][i]
+  month <- as.numeric(substr(date,start = 6,stop = 7))
+  year <- substr(date,start = 1,stop = 4)
+  name <- c(name,paste(months[month], year,sep = "_"))
 }
 names(tmp_df) <- c("lon","lat",name)
 
 
 # transform dataframe in sf
-sea_floor_tmp <- st_as_sf(tmp_df02, crs = "EPSG:4326", coords = c("lon","lat"))
+sea_floor_tmp <- st_as_sf(tmp_df, crs = "EPSG:4326", coords = c("lon","lat"))
 
 
 #map the tmp ####
@@ -117,12 +119,12 @@ ggplot(sea_floor_tmp_SPM['May_2025'])+
 writeRaster(ncrast_SPM,
             paste(here(),"/environment_exploration/Environment_Data/processed/",
                   "BottomT_500",sep = ""),
-                             format = "GTiff")
+                             format = "GTiff", overwrite=TRUE)
 ncstars=read_stars(paste(
   here(),"/environment_exploration/Environment_Data/processed/",
                          "BottomT_500.tif",sep = ""))
 
-# transform dataframe in sf
+# transform stars object in sf
 sea_floor_tmp_SPM <- st_as_sf(ncstars, crs = "EPSG:4467",
                               coords = c("lon","lat"))
 names(sea_floor_tmp_SPM) <- c(name,"geometry")
@@ -134,3 +136,22 @@ saveRDS(sea_floor_tmp_SPM,
 grid_bottom_tmp <- 
   st_join(grid, sea_floor_tmp_SPM) # to get intersection of points and poly
 
+ggplot(grid_bottom_tmp)+
+  geom_sf(aes(color=May_2025))+
+  scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111100")+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "#d0d1e6"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))
+
+saveRDS(grid_bottom_tmp,
+        paste(here(),"/environment_exploration/Environment_Data/processed/",
+              "grid_bottom_tmp.rds",sep = ""))
