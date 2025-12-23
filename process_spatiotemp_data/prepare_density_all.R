@@ -12,6 +12,7 @@ library(dplyr)
 library(ggplot2)
 library(ggspatial)
 library(XML)
+library(viridis)
 
 #############################################################
 #PART 1 - Work on the  annotation summary of 2021, 2022, 2023
@@ -200,12 +201,30 @@ saveRDS(data_position,
 #PART 2 - Create a data table with all the year
 #############################################################
 
-# load 2025
+# load data
 data_abun_2025 <- readRDS(
   paste(here(),"/via3_data_exploration/Data/processed/data_abun_2025.rds",
         sep=""))
 centroid_2025 <- read.csv(paste(
   here(),"/SIG/SIG_data/centroid_tracks.csv", sep=""))
+
+data_position_2021 <- readRDS(
+  paste(here(),
+        "/process_spatiotemp_data/Data/processed/data_position_2021.rds",
+        sep="")
+)
+
+data_position_2022 <- readRDS(
+  paste(here(),
+        "/process_spatiotemp_data/Data/processed/data_position_2022.rds",
+        sep="")
+)
+
+data_position_2023 <- readRDS(
+  paste(here(),
+        "/process_spatiotemp_data/Data/processed/data_position_2023.rds",
+        sep="")
+)
 
 # create a data frame with station,X,Y,abun,intensity,area for each year ####
 # 2025
@@ -249,10 +268,10 @@ data_abun_tot <- rbind(data_abun_2021,
                        data_abun_2023,
                        data_abun_2025)
 
-# /1000 to have the coordinates in km because the inference will be in km
+# convert in sf
 data_abun_tot <- data_abun_tot %>%
-  mutate(long = X/1000) %>%
-  mutate(lat = Y/1000) %>%
+  mutate(long = X) %>%
+  mutate(lat = Y) %>%
   st_as_sf(.,coords = c("long","lat"),crs = 4467)
 
 saveRDS(data_abun_tot,
@@ -265,15 +284,73 @@ saveRDS(data_abun_tot,
 #############################################################
 
 #load data
-data_abun_tot <- readRDS(
-  paste(here(), "/process_spatiotemp_data/Data/processed/data_abun_tot.rds",
-                               sep=""))
 bathy_spm <- readRDS(paste(
   here(),"/environment_exploration/Environment_Data/processed/",
                            "Bathy_3PS.rds",sep = ""))
 sea_floor_temp_spm <- readRDS(
   paste(here(),"/environment_exploration/Environment_Data/processed/",
-        "BottomT_500.rds",sep = "")
+        "BottomT_500.rds",sep = ""))
+sea_floor_temp_spm <- sea_floor_temp_spm[,grep(pattern = "May",
+                                               names(sea_floor_temp_spm))]
+calcul_area <- readRDS(paste(here(),
+                             "/SIG/SIG_Data/study_calcul_area.rds",sep=""))
+
+data_abun <- list(
+  "2021" = data_abun_2021,
+  "2022" = data_abun_2022,
+  "2023" = data_abun_2023,
+  "2025" = data_abun_2025
 )
 
+for (annee in c(2021,2022,2023,2025)){
+  data <- sea_floor_temp_spm[,grep(pattern = as.character(annee),
+                                   names(sea_floor_temp_spm))]
+  names(data) <- c("temp","geometry")
+  data_abun[[as.character(annee)]] <- data_abun[[as.character(annee)]] %>%
+    mutate(long = X) %>%
+    mutate(lat = Y) %>%
+    st_as_sf(.,coords = c("long","lat"),crs = 4467) 
+  
+  data_abun[[as.character(annee)]] <- st_join(data_abun[[as.character(annee)]],
+                                              bathy_spm)
+  data_abun[[as.character(annee)]] <- st_join(data_abun[[as.character(annee)]],
+                                              data)
+}
 
+
+data_abun_tot_cov <- rbind(data_abun[["2021"]],
+                           data_abun[["2022"]],
+                           data_abun[["2023"]],
+                           data_abun[["2025"]])
+
+# keep only point in the study area
+data_abun_tot_cov <- st_join(calcul_area,data_abun_tot_cov)
+data_abun_tot_cov <- as.data.frame(data_abun_tot_cov)
+data_abun_tot_cov <- data_abun_tot_cov[,1:(length(names(data_abun_tot_cov))-1)]
+data_abun_tot_cov <- data_abun_tot_cov %>%
+  mutate(long = X) %>%
+  mutate(lat = Y) %>%
+  st_as_sf(.,coords = c("long","lat"),crs = 4467)
+
+
+saveRDS(data_abun_tot_cov,
+        paste(here(),
+              "/process_spatiotemp_data/Data/processed/data_abun_tot_cov.rds",
+              sep=""))
+
+ggplot(data_abun_tot_cov)+
+  geom_sf(aes(color=temp))+
+  scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "#d0d1e6"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))
