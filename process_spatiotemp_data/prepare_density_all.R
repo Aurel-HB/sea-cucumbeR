@@ -354,3 +354,20 @@ ggplot(data_abun_tot_cov)+
         panel.background = element_rect(fill = "#d0d1e6"),
         panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
                                         colour = "white"))
+
+ggplot(data_abun_tot_cov)+
+  geom_sf(aes(color=log(intensity)), size = 3)+
+  scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "#d0d1e6"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))
