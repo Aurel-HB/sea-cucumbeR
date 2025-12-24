@@ -177,7 +177,7 @@ points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
 
 see detail [here](https://cran.r-project.org/web/packages/sdmTMB/vignettes/model-description.html) :
 
-
+The density of sea cucumber follow a gamma distribution :
 $$
 Y_{\boldsymbol{s},t} \sim Gamma(\mu_{\boldsymbol{s},t},\phi)
 $$
@@ -185,14 +185,17 @@ $$
 {E}[Y_{\boldsymbol{s},t}] = \mu_{\boldsymbol{s},t}
 $$
 $$
-log(\mu_{\boldsymbol{s},t}) = \underbrace{\alpha_{\boldsymbol{s},t}}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Gaussian Field}} +\underbrace{\epsilon_{\boldsymbol{s},t}}_{\text{Spatio-temporal Gaussian Field}}
+log(\mu_{\boldsymbol{s},t}) = \underbrace{\alpha_{\boldsymbol{s},t}}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Field}} +\underbrace{\epsilon_{\boldsymbol{s},t}}_{\text{Spatio-temporal Field}}
 $$
+The spatial random fields follow a Gaussian Markov random field with Matérn covariance :
 $$
 \omega \sim \mathcal{N}(0,Q^{-1}_\omega)
 $$
 First-order auto regressive, AR(1), spatiotemporal random fields add a parameter defining the correlation between random field deviations from one time step to the next :
 $$
-\delta_{t=1} \sim \mathcal{N}(0,Q^{-1}_\epsilon)\\
+\delta_{t=1} \sim \mathcal{N}(0,Q^{-1}_\epsilon)
+$$
+$$
 \delta_{t>1} \sim \rho\delta_{t-1}+\sqrt[]{1-\rho^2}\epsilon_t, \epsilon_t \sim \mathcal{N}(0,Q^{-1}_\epsilon)
 $$
 

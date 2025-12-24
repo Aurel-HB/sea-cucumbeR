@@ -7,9 +7,11 @@
 .DAT
 .html
 .jpeg
+.png
 SIG_Data/
 Environment_Data/
 anotate_Data/
 Data/
 output/
 Spatiotemporal_cucumaria_abundance_files/
+files/
