@@ -1,0 +1,203 @@
+---
+title: "Spatiotemporal_cucumaria_abundance"
+author: "Hebert Burggraeve Aurel"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Load libraries and data
+```{r,include=T,echo=F}
+
+# Helper function to install missing packages
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+}
+
+# List of required packages
+required_packages <- c("leaflet","dplyr",
+                       "ggplot2","sf", "sdmTMB", "here",
+                       "INLA","viridis","raster")
+
+# Check and install missing packages
+invisible(lapply(required_packages, install_if_missing))
+
+# Load packages 
+library(dplyr) 
+library(ggplot2) 
+library(sf)
+library(sdmTMB)
+library(leaflet)
+library(INLA)
+library(viridis)
+library(raster)
+library(here) 
+
+#here::here()
+
+# ---------------------------------------------
+path.outputs<-"outputs/"
+path.data<-"data/"
+path.models<-"models/"
+# ---------------------------------------------
+# MAPS
+# --------------------------------------------- 
+# load the study area
+calcul_area <- readRDS(paste(here(),
+                             "/Data/study_calcul_area.rds",sep=""))
+calcul_area_WG84 <- st_transform(calcul_area, crs = "EPSG:4326")
+# load the terrestrial boundaries
+
+
+# MAPPING ELEMENTS
+leaflet()  %>% 
+  addTiles() %>%
+  setView(-56,45.5, zoom=7) %>%
+  addPolygons(data =calcul_area_WG84, color = "#444444", weight = 1,
+              smoothFactor = 0.5, opacity = 1.0, fillOpacity = 0.5)
+
+
+```
+
+# Load the HOLOTVSPM data 
+The data have been project on the EPSG:4467 / RGSPM06 / UTM zone 21N coordinates system that is the one used for Saint-Pierre and Miquelon. (Visit https://epsg.io/4467)
+
+This is useful since geostatistical modeling will be performed in an equal-distance projection.
+
+```{r,include=T,echo=F}
+data_holotv <- readRDS(
+  paste(here(),"/Data/data_abun_tot_cov.rds",sep = "")
+)
+data_holotv <- data_holotv %>%
+  mutate(X=X/1000) %>%
+  mutate(Y=Y/1000) # the lat and long are in km for modelling
+
+head(data_holotv)
+```
+The data provide the absolute abundance and the density for each point with the value of the bathymetry and the potential sea floor temperature. 
+
+# Prepare the grid for prediction
+
+```{r,include=T,echo=F}
+grid_bathy <- readRDS(
+  paste(here(),"/Data/grid_bathy.rds",sep = "")
+)
+
+grid_tmp <- readRDS(
+  paste(here(),"/Data/grid_bottom_tmp.rds",sep = "")
+)
+
+# The survey is only in may so we keep the may data
+grid_tmp <- grid_tmp[,grep(pattern = "May",names(grid_tmp))]
+
+# The grid have to be replicated for each year with the bathymetry and bottom temperature values
+grid <- data.frame()
+for (i in 1:5){
+  data <- st_join(grid_tmp[,i],grid_bathy)
+  data <- data %>% mutate(year = 2020+i)
+  names(data) <- c("bottomT","long","lat","bathy","geometry","year")
+  grid <- rbind(grid,data[,c(1,2,3,4,6,5)])
+} # the lat and long are in km for modelling
+
+ggplot(grid)+
+  geom_sf(aes(color=bottomT), size = 2)+
+    scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Température potentiel du fond")
+
+ggplot(grid)+
+  geom_sf(aes(color=bathy), size = 6.5)+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  theme(aspect.ratio = 1,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Bathymétrie de la zone")
+```
+
+# Create the mesh for inference with INLA
+```{r, include=T,echo=F}
+#using the grid of the area
+grid <- as.data.frame(grid)[,c(1,2,3,4,5)]
+
+bnd <- INLA::inla.nonconvex.hull(cbind(grid$long, grid$lat),
+                                 convex = -0.04)
+bnd2 = INLA::inla.nonconvex.hull(cbind(grid$long, grid$lat),
+                                 convex = -0.15)
+
+mesh_inla <- INLA::inla.mesh.2d(
+  loc = as.matrix(grid[,c(2,3)]),
+  boundary = list(bnd,bnd2),
+  cutoff = 1.852, # minimum triangle edge length
+  max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
+) # 1.852 is the distance in meter of a mile nautic
+mesh <- make_mesh(as.data.frame(data_holotv), c("X", "Y"), mesh = mesh_inla)
+
+plot(mesh$mesh, main = NA, edge.color = "grey60", asp = 1)
+points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+```
+
+# Description of the tested model
+
+**Common features :**
+
+-   Link function : log
+
+-   Observation model family : Gamma
+
+-   Mesh define directly with INLA: mesh (see above)
+
+-   Spatial random fields : Multivariate normal distribution with Matérn covariance
+
+-   Spatiotemporal random fields : First-order auto regressive - AR(1)
+
+**General form of the model**
+
+see detail [here](https://cran.r-project.org/web/packages/sdmTMB/vignettes/model-description.html) :
+
+
+$$
+Y_{\boldsymbol{s},t} \sim Gamma(\mu_{\boldsymbol{s},t},\phi)
+$$
+$$
+{E}[Y_{\boldsymbol{s},t}] = \mu_{\boldsymbol{s},t}
+$$
+$$
+log(\mu_{\boldsymbol{s},t}) = \underbrace{\alpha_{\boldsymbol{s},t}}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Gaussian Field}} +\underbrace{\epsilon_{\boldsymbol{s},t}}_{\text{Spatio-temporal Gaussian Field}}
+$$
+$$
+\omega \sim \mathcal{N}(0,Q^{-1}_\omega)
+$$
+First-order auto regressive, AR(1), spatiotemporal random fields add a parameter defining the correlation between random field deviations from one time step to the next :
+$$
+\delta_{t=1} \sim \mathcal{N}(0,Q^{-1}_\epsilon)\\
+\delta_{t>1} \sim \rho\delta_{t-1}+\sqrt[]{1-\rho^2}\epsilon_t, \epsilon_t \sim \mathcal{N}(0,Q^{-1}_\epsilon)
+$$
+
+
+
+
+
+
