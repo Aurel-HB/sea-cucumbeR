@@ -8,7 +8,7 @@ editor_options:
 ---
 
 # Load libraries and data
-```{r,include=T,echo=F}
+```{r,include=F,echo=F}
 
 # Helper function to install missing packages
 install_if_missing <- function(pkg) {
@@ -20,7 +20,7 @@ install_if_missing <- function(pkg) {
 # List of required packages
 required_packages <- c("leaflet","dplyr",
                        "ggplot2","sf", "sdmTMB", "here",
-                       "INLA","viridis","raster")
+                       "INLA","viridis","DHARMa","future")
 
 # Check and install missing packages
 invisible(lapply(required_packages, install_if_missing))
@@ -33,15 +33,14 @@ library(sdmTMB)
 library(leaflet)
 library(INLA)
 library(viridis)
-library(raster)
-library(here) 
+library(DHARMa)
+library(here)
+library(future)
 
 #here::here()
+```
 
-# ---------------------------------------------
-path.outputs<-"outputs/"
-path.data<-"data/"
-path.models<-"models/"
+```{r,include=T,echo=F}
 # ---------------------------------------------
 # MAPS
 # --------------------------------------------- 
@@ -76,11 +75,44 @@ data_holotv <- data_holotv %>%
   mutate(Y=Y/1000) # the lat and long are in km for modelling
 
 head(data_holotv)
+
+ggplot(data_holotv)+
+  geom_sf(aes(color=log(intensity)), size = 2)+
+    scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 2,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Densité en nb/m² en échelle log")
 ```
 The data provide the absolute abundance and the density for each point with the value of the bathymetry and the potential sea floor temperature. 
+We can check the correlation between the density and the bathymetry then with the potential sea floor temperature.
+```{r,include=T,echo=F}
+ggplot(data=data_holotv, aes(x = intensity, y = bathy)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Density", y = "Depth (m)")
+
+ggplot(data=data_holotv, aes(x = intensity, y = temp)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Density", y = "Bottom temp (°C)")
+```
+
+
 
 # Prepare the grid for prediction
 
+We load the grid of 0.5 km by 0.5 km with the environmental variables.
 ```{r,include=T,echo=F}
 grid_bathy <- readRDS(
   paste(here(),"/Data/grid_bathy.rds",sep = "")
@@ -107,7 +139,7 @@ ggplot(grid)+
     scale_color_viridis()+
   geom_sf(data=calcul_area, fill = "#11111111")+
   facet_wrap(~year, ncol=2)+
-  theme(aspect.ratio = 1,
+  theme(aspect.ratio = 2,
         legend.title = element_blank(),
         title = element_text(color = "black",face = "bold"),
         plot.title = element_text( size = 12, hjust = 0.5),
@@ -118,12 +150,12 @@ ggplot(grid)+
         panel.background = element_rect(fill = "lightblue"),
         panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
                                         colour = "white"))+
-  labs(title = "Température potentiel du fond")
+  labs(title = "Température potentielle du fond")
 
 ggplot(grid)+
-  geom_sf(aes(color=bathy), size = 6.5)+
+  geom_sf(aes(color=bathy), size = 5)+
   geom_sf(data=calcul_area, fill = "#11111111")+
-  theme(aspect.ratio = 1,
+  theme(aspect.ratio = 2,
         legend.title = element_blank(),
         title = element_text(color = "black",face = "bold"),
         plot.title = element_text( size = 12, hjust = 0.5),
@@ -185,7 +217,7 @@ $$
 {E}[Y_{\boldsymbol{s},t}] = \mu_{\boldsymbol{s},t}
 $$
 $$
-log(\mu_{\boldsymbol{s},t}) = \underbrace{\alpha_{\boldsymbol{s},t}}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Field}} +\underbrace{\epsilon_{\boldsymbol{s},t}}_{\text{Spatio-temporal Field}}
+log(\mu_{\boldsymbol{s},t}) = \underbrace{\alpha}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Field}} +\underbrace{\epsilon_{\boldsymbol{s},t}}_{\text{Spatio-temporal Field}}
 $$
 The spatial random fields follow a Gaussian Markov random field with Matérn covariance :
 $$
@@ -195,12 +227,349 @@ First-order auto regressive, AR(1), spatiotemporal random fields add a parameter
 $$
 \delta_{t=1} \sim \mathcal{N}(0,Q^{-1}_\epsilon)
 $$
+
 $$
 \delta_{t>1} \sim \rho\delta_{t-1}+\sqrt[]{1-\rho^2}\epsilon_t, \epsilon_t \sim \mathcal{N}(0,Q^{-1}_\epsilon)
 $$
 
+In the outputs:
+
+-   sigma_O=spatial SD : marginal standard deviation of ω
+
+-   sigma_E=Spatiotemporal SD : marginal standard deviation of ϵ
+
+
+# Model 1
+We want to interpolate over missed time slices , in our case 2024
+As an example, we can’t predict with years as factors below because the model 
+won’t know what value to assign to years without data.
+```{r,echo=F}
+data <- as.data.frame(data_holotv)[,seq(1,9,1)]
+
+fit_tot <- sdmTMB(
+  intensity ~ 1+bathy+temp,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot)
+```
+
+# Check the model 
+## Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot)
+```
+
+## Check the residual
+```{r, echo=F}
+data$resids <- residuals(fit_tot)
+hist(data$resids)
+
+qqnorm(data$resids)
+abline(a = 0, b = 1)
+```
+```{r}
+ggplot(data, aes(X, Y, col = resids)) + scale_colour_gradient2() +
+  geom_point() + facet_wrap(~year) + coord_fixed() +theme(aspect.ratio = 3)
+```
+Use the Dharma package to check the residuals 
+```{r, echo=F}
+set.seed(seed = 12)
+model_sim <- simulate(fit_tot, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot, return_DHARMa = TRUE)
+plot(simulationOutput)
+```
+
+
+## Check the model performance by Cross Validation
+Cross-validation is one of the best approaches that can be used to quantify model performance and compare sdmTMB models with different structures (unlike AIC, this approach will also factor in uncertainty in random effects).
+
+Cross validation in sdmTMB is implemented using the sdmTMB_cv() function, with the k_folds argument specifying the number of folds (defaults to 8). The function uses parallelization by default a future::plan() is set, but this can be turned off with the parallel argument.
+```{r,echo=F,include=F}
+clust <- sample(seq_len(4), size = nrow(data), replace = TRUE)
+
+plan(multisession, workers = 2)
+m_cv <- sdmTMB_cv(
+  intensity ~ 1+bathy+temp,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust 
+)
+```
+Lots of measures of predictive accuracy can be used to evaluate model performance. By default, sdmTMB_cv() returns a list that contains the sum of the log likelihoods for each left-out fold and the total summed across the left-out folds.
+*Fold log-likelihood:*
+```{r,echo=F}
+m_cv$fold_loglik # fold log-likelihood
+```
+*Total log-likelihood:*
+```{r,echo=F}
+m_cv$sum_loglik # total log-likelihood
+```
+*Root Mean Square Error (RMSE) and Mean Absolute Error (MAE) by fold:*
+```{r,echo=F}
+# RMSE and MAE by fold:
+group_by(m_cv$data, cv_fold) |> 
+  summarize(
+    rmse = sqrt(mean((intensity - cv_predicted)^2)),
+    mae = mean(abs(intensity - cv_predicted))
+  )
+```
 
 
 
+# Prediction
+```{r,echo=F}
+names(grid)[c(1,2,3)] <- c("temp","X","Y")
+predictions <- predict(fit_tot, newdata = grid,
+                       return_tmb_object = TRUE)
 
+#Let’s make a small function to make maps
+plot_map <- function(dat, column) {
+  ggplot(dat, aes(X, Y, fill = {{ column }})) +
+    geom_raster() +
+    facet_wrap(~year, nrow = 1) +
+    coord_fixed()+
+    theme(aspect.ratio = 3)
+}
+```
 
+There are four kinds of predictions that we get out of the model. First we will show the predictions that incorporate all fixed effects and random effects:
+
+```{r}
+plot_map(predictions$data, exp(est)) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  ggtitle("Prediction (fixed effects + all random effects)")
+```
+We can also look at just the fixed effects, here year:
+
+```{r}
+plot_map(predictions$data, exp(est_non_rf)) +
+  ggtitle("Prediction (fixed effects only)") +
+  scale_fill_viridis_c(trans = "sqrt")
+```
+
+We can look at the spatial random effects that represent consistent deviations in space through time that are not accounted for by our fixed effects. In other words, these deviations represent consistent biotic and abiotic factors that are affecting biomass density but are not accounted for in the model.
+
+```{r}
+plot_map(predictions$data, omega_s) +
+  ggtitle("Spatial random effects only") +
+  scale_fill_gradient2()
+```
+
+And finally we can look at the spatiotemporal random effects that represent deviation from the fixed effect predictions and the spatial random effect deviations. These represent biotic and abiotic factors that are changing through time and are not accounted for in the model.
+
+```{r}
+plot_map(predictions$data, epsilon_st) +
+  ggtitle("Spatiotemporal random effects only") +
+  scale_fill_gradient2()
+```
+
+# Total abundance calculation
+
+When we ran our predict.sdmTBM() function, it also returned a report from TMB in the output because we included return_tmb_object = TRUE. We can then run our get_index() function to extract the total abundance calculations and standard errors.
+
+We will need to set the area argument to 0.25 km2 since our grid cells are 0.5 km x 0.5 km. If some grid cells were not fully in the survey domain (or were on land), we could feed a vector of grid areas to the area argument that matched the number of grid cells.
+
+```{r, echo=FALSE}
+index <- get_index(predictions, area = 250000, bias_correct = TRUE)
+# be careful our prediction is in nb/m² so area have to be in m²
+
+ggplot(index, aes(year, est)) + geom_line() +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.4) +
+  xlab('Year') + ylab('Abundance estimate (nombre)')
+```
+
+# Test other models
+## Same Model without bathy and bottom temperature
+```{r,echo=F}
+fit_tot_no_cov <- sdmTMB(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_no_cov)
+```
+Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_no_cov)
+```
+Use the Dharma package to check the residuals 
+```{r, echo=F}
+set.seed(seed = 12)
+model_sim <- simulate(fit_tot_no_cov, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot_no_cov, return_DHARMa = TRUE)
+plot(simulationOutput)
+```
+Cross validation
+```{r,echo=F,include=F}
+clust <- sample(seq_len(4), size = nrow(data), replace = TRUE)
+
+plan(multisession, workers = 2)
+m_cv_no_cov <- sdmTMB_cv(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust 
+)
+```
+Lots of measures of predictive accuracy can be used to evaluate model performance. By default, sdmTMB_cv() returns a list that contains the sum of the log likelihoods for each left-out fold and the total summed across the left-out folds.
+*Fold log-likelihood:*
+```{r,echo=F}
+m_cv_no_cov$fold_loglik # fold log-likelihood
+```
+*Total log-likelihood:*
+Compare log-likelihoods -- higher is better!
+```{r,echo=F}
+m_cv_no_cov$sum_loglik # total log-likelihood
+```
+As a reminder the total log-lkelihood of the model with bath and bottom temp
+```{r,echo=F}
+m_cv$sum_loglik # total log-likelihood
+```
+In this example, using either the predictive log-likelihood or ELPD would lead one to conclude that including depth and bottom temperature doesn't improve the predictive accuracy of the model.
+
+## Model with a log-normal link function
+```{r,echo=F}
+fit_tot_logN <- sdmTMB(
+  intensity ~ 1+bathy+temp,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = lognormal(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_logN)
+```
+Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_logN)
+```
+
+The sanity check show that the non-linear minimizer did not converge. 
+So we don't analyse further this model and try another one.
+
+## Model with a log-normal link function and without bathy and bottom temp
+```{r,echo=F}
+fit_tot_logN_no_cov <- sdmTMB(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = lognormal(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_logN_no_cov)
+```
+Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_logN_no_cov)
+```
+
+Use the Dharma package to check the residuals 
+```{r, echo=F}
+set.seed(seed = 12)
+model_sim <- simulate(fit_tot_logN_no_cov, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot_logN_no_cov, return_DHARMa = TRUE)
+plot(simulationOutput)
+```
+Cross validation
+```{r,echo=F, include=F}
+clust <- sample(seq_len(4), size = nrow(data), replace = TRUE)
+
+plan(multisession, workers = 2)
+m_cv_logN_no_cov <- sdmTMB_cv(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = lognormal(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust 
+)
+```
+Lots of measures of predictive accuracy can be used to evaluate model performance. By default, sdmTMB_cv() returns a list that contains the sum of the log likelihoods for each left-out fold and the total summed across the left-out folds.
+*Fold log-likelihood:*
+```{r,echo=F}
+m_cv_logN_no_cov$fold_loglik # fold log-likelihood
+```
+*Total log-likelihood:*
+Compare log-likelihoods -- higher is better!
+```{r,echo=F}
+m_cv_logN_no_cov$sum_loglik # total log-likelihood
+```
+As a reminder the total log-lkelihood of the model without bath and bottom temp
+```{r,echo=F}
+m_cv_no_cov$sum_loglik # total log-likelihood
+```
+It seems that putting a log-normal link in the no-covariate model improves the predictive accuracy of the model.
+
+Prediction
+```{r,echo=F}
+names(grid)[c(1,2,3)] <- c("temp","X","Y")
+predictions <- predict(fit_tot_logN_no_cov, newdata = grid,
+                       return_tmb_object = TRUE)
+```
+
+There are four kinds of predictions that we get out of the model. First we will show the predictions that incorporate all fixed effects and random effects:
+
+```{r}
+plot_map(predictions$data, exp(est)) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  ggtitle("Prediction (fixed effects + all random effects)")
+```
+
+Spatial effect:
+```{r}
+plot_map(predictions$data, omega_s) +
+  ggtitle("Spatial random effects only") +
+  scale_fill_gradient2()
+```
+
+Spatio-temporal effect:
+```{r}
+plot_map(predictions$data, epsilon_st) +
+  ggtitle("Spatiotemporal random effects only") +
+  scale_fill_gradient2()
+```
