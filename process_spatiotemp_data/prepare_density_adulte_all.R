@@ -184,15 +184,15 @@ for (indice in 1:3){
   assign(paste("data_position",2020+indice,sep = "_"), data_position)
 }
 
-saveRDS(data_position,
+saveRDS(data_position_2021,
         paste(here(),
               "/process_spatiotemp_data/Data/processed/data_position_2021.rds",
               sep=""))
-saveRDS(data_position,
+saveRDS(data_position_2022,
         paste(here(),
               "/process_spatiotemp_data/Data/processed/data_position_2022.rds",
               sep=""))
-saveRDS(data_position,
+saveRDS(data_position_2023,
         paste(here(),
               "/process_spatiotemp_data/Data/processed/data_position_2023.rds",
               sep=""))
@@ -279,6 +279,10 @@ saveRDS(data_abun_tot,
               "/process_spatiotemp_data/Data/processed/data_abun_tot.rds",
               sep=""))
 
+data_abun_tot <- readRDS(paste(here(),
+              "/process_spatiotemp_data/Data/processed/data_abun_tot.rds",
+              sep=""))
+
 #############################################################
 #PART 3 - Add covariable to the sf table with all the abundance
 #############################################################
@@ -292,6 +296,22 @@ sea_floor_temp_spm <- readRDS(
         "BottomT_500.rds",sep = ""))
 sea_floor_temp_spm <- sea_floor_temp_spm[,grep(pattern = "May",
                                                names(sea_floor_temp_spm))]
+chla_spm <- readRDS(
+  paste(here(),"/environment_exploration/Environment_Data/processed/",
+        "Chla_500.rds",sep = ""))
+chla_spm <- chla_spm[,grep(pattern = "May",names(chla_spm))]
+
+vo_spm <- readRDS(
+  paste(here(),"/environment_exploration/Environment_Data/processed/",
+        "Current_vo_500.rds",sep = ""))
+vo_spm <- vo_spm[,grep(pattern = "May",names(vo_spm))]
+
+uo_spm <- readRDS(
+  paste(here(),"/environment_exploration/Environment_Data/processed/",
+        "Current_uo_500.rds",sep = ""))
+uo_spm <- uo_spm[,grep(pattern = "May",names(uo_spm))]
+
+
 calcul_area <- readRDS(paste(here(),
                              "/SIG/SIG_Data/study_calcul_area.rds",sep=""))
 
@@ -303,9 +323,21 @@ data_abun <- list(
 )
 
 for (annee in c(2021,2022,2023,2025)){
-  data <- sea_floor_temp_spm[,grep(pattern = as.character(annee),
+  #select year for each covariates
+  data_temp <- sea_floor_temp_spm[,grep(pattern = as.character(annee),
                                    names(sea_floor_temp_spm))]
-  names(data) <- c("temp","geometry")
+  names(data_temp) <- c("temp","geometry")
+  data_chla <- chla_spm[,grep(pattern = as.character(annee),
+                                        names(chla_spm))]
+  names(data_chla) <- c("chla","geometry")
+  data_uo <- uo_spm[,grep(pattern = as.character(annee),
+                                        names(uo_spm))]
+  names(data_uo) <- c("uo","geometry")
+  data_vo <- vo_spm[,grep(pattern = as.character(annee),
+                                        names(vo_spm))]
+  names(data_vo) <- c("vo","geometry")
+  
+  
   data_abun[[as.character(annee)]] <- data_abun[[as.character(annee)]] %>%
     mutate(long = X) %>%
     mutate(lat = Y) %>%
@@ -314,7 +346,13 @@ for (annee in c(2021,2022,2023,2025)){
   data_abun[[as.character(annee)]] <- st_join(data_abun[[as.character(annee)]],
                                               bathy_spm)
   data_abun[[as.character(annee)]] <- st_join(data_abun[[as.character(annee)]],
-                                              data)
+                                              data_temp)
+  data_abun[[as.character(annee)]] <- st_join(data_abun[[as.character(annee)]],
+                                              data_chla)
+  data_abun[[as.character(annee)]] <- st_join(data_abun[[as.character(annee)]],
+                                              data_uo)
+  data_abun[[as.character(annee)]] <- st_join(data_abun[[as.character(annee)]],
+                                              data_vo)
 }
 
 
