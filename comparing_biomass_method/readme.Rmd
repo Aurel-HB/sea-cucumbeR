@@ -1,0 +1,7 @@
+---
+title: "readme"
+output: html_document
+---
+
+In this part we explore the data from the survey holospm 2025.
+We test different techniques to evaluate the total biomass of Cucumaria frondosa.

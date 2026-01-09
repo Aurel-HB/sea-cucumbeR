@@ -1,0 +1,8 @@
+---
+title: "readme"
+output: html_document
+---
+
+In this part we explore the environmental data in the 3PS zone.
+This data comes from the Copernicus Marine Service.
+This part is essentially composed of data processing.

@@ -1,0 +1,7 @@
+---
+title: "readme"
+output: html_document
+---
+
+In this part we focus on creating complete data sets that summarize the HOLOTVSPM data.
+This data tables are then used in modelling Cucumaria frondosa distribution.

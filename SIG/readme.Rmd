@@ -1,0 +1,7 @@
+---
+title: "readme"
+output: html_document
+---
+
+This part is dedicate at the spatial exploration of study area and how represent best the zone.
+The data groups most of the object used in the creation of the plan sampling.

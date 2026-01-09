@@ -1,0 +1,8 @@
+---
+title: "readme"
+output: html_document
+---
+
+In the case, of the workshop about spatio-temporal satistics modelisation of the 02/02/2026,
+we focus on modelling the Cucumaria frondosa density in the area of the HOLOTVSPM surveys.
+The models explore different distribution and combination of covariates.
