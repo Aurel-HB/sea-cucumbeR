@@ -285,27 +285,27 @@ points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
 
 see detail [here](https://cran.r-project.org/web/packages/sdmTMB/vignettes/model-description.html) :
 
-The density of sea cucumber follow a gamma distribution :
+Let  $Y(s_{i},t_i)=Y_{\boldsymbol{s},t}$ be the random variable associated with the i-th density at spatial location $s_i$, where $s_i = (x_i,y_i)$ are the spatial coordinates and at the time $t_i$, where $t_i$ is the year. $Y_i$ then follows a Gamma distribution with a shape parameter $ \alpha$ and a scale parameter $\theta$, such that the model can be written as
 $$
-Y_{\boldsymbol{s},t} \sim Gamma(\mu_{\boldsymbol{s},t},\phi)
-$$
-$$
-{E}[Y_{\boldsymbol{s},t}] = \mu_{\boldsymbol{s},t}
+Y_{\boldsymbol{s},t} \sim Gamma(\alpha,\theta)
 $$
 $$
-log(\mu_{\boldsymbol{s},t}) = \underbrace{\alpha}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Field}} +\underbrace{\epsilon_{\boldsymbol{s},t}}_{\text{Spatio-temporal Field}}
+{E}[Y_{\boldsymbol{s},t}] = \alpha\theta = \mu_{\boldsymbol{s},t}=\boldsymbol{S}
+$$
+$$
+log(\boldsymbol{S}) = \underbrace{c}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Field}} +\underbrace{\delta_{\boldsymbol{s},t}}_{\text{Spatio-temporal Field}}
 $$
 The spatial random fields follow a Gaussian Markov random field with Matérn covariance :
 $$
-\omega \sim \mathcal{N}(0,Q^{-1}_\omega)
+\omega \sim \mathcal{MG}(0,\Sigma)
 $$
 First-order auto regressive, AR(1), spatiotemporal random fields add a parameter defining the correlation between random field deviations from one time step to the next :
 $$
-\delta_{t=1} \sim \mathcal{N}(0,Q^{-1}_\epsilon)
+\delta_{t=1} = U_{t=1} \sim \mathcal{MG}(0,\Sigma)
 $$
 
 $$
-\delta_{t>1} \sim \rho\delta_{t-1}+\sqrt[]{1-\rho^2}\epsilon_t, \epsilon_t \sim \mathcal{N}(0,Q^{-1}_\epsilon)
+\delta_{t>1} \sim \rho\delta_{t-1}+\sqrt[]{1-\rho^2}U_t,\text{ } U_t \sim \mathcal{MG}(0,\Sigma)
 $$
 
 In the outputs:
@@ -480,6 +480,30 @@ There are four kinds of predictions that we get out of the model. First we will 
 plot_map(predictions$data, exp(est)) +
   scale_fill_viridis_c(trans = "sqrt") +
   ggtitle("Prediction (fixed effects + all random effects)")
+
+# plot the density as sequential data
+cut_min <- trunc(exp(predictions$data$est))
+cut_max <- cut_min+1
+cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
+
+for (i in 1:length(cuts)){
+  if (cuts[i]=="(8-9]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(9-10]"){
+    cuts[i] <- ">8"
+  }
+}
+
+predictions$data$cuts <- as.factor(cuts)
+
+ggplot(predictions$data, aes(X, Y, fill = cuts)) +
+    geom_raster() +
+    scale_fill_brewer("Density", type = "seq", palette = "YlOrRd")+
+    facet_wrap(~year, nrow = 1) +
+    coord_fixed()+
+    theme(aspect.ratio = 3)+
+    ggtitle("Prediction (fixed effects + all random effects)")
 ```
 We can also look at just the fixed effects, here year:
 
