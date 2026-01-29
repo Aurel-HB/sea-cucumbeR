@@ -660,6 +660,14 @@ CV
 
 In this example, using the predictive log-likelihood  would lead one to conclude that choose the lognormal distribution improves the predictive accuracy of the model from the gamma distribution.
 
+Akaike information criterion
+```{r,echo=F}
+data.frame(
+  "AIC"=c("Gamma", AIC(fit_tot_no_cov)),
+  "AIC"=c("Lognormal", AIC(fit_tot_logN))
+)
+```
+The AIC comparaison would lead to conclue that the lognormal distribution minimize the information loss.
 
 # Compare models with different covariates
 ## Model with a log-normal link function and with chla
@@ -814,6 +822,16 @@ CV <- data.frame(
 row.names(CV) <- c("No_cov","Chl-a","All_cov")
 CV
 ```
+
+## Akaike information criterion
+```{r,echo=F}
+data.frame(
+  "AIC"=c("Lognormal", AIC(fit_tot_logN)),
+  "AIC"=c("Lognormal_chla", AIC(fit_tot_logN_chla)),
+  "AIC"=c("Lognormal_bat_temp_chla", AIC(fit_tot_logN_cov))
+)
+```
+
 
 ## Prediction with the best model
 ```{r,echo=F}
