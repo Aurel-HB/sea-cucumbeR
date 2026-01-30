@@ -257,6 +257,7 @@ bnd2 = INLA::inla.nonconvex.hull(cbind(grid_bathy$long, grid_bathy$lat),
 
 mesh_inla <- INLA::inla.mesh.2d(
   loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
+  #loc = as.matrix(as.data.frame(data_holotv)[,c(2,3)]),
   boundary = list(bnd,bnd2),
   cutoff = 1.852, # minimum triangle edge length
   max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
@@ -574,6 +575,14 @@ model_sim <- simulate(fit_tot_no_cov, nsim = 1000, type = "mle-mvn")
 simulationOutput <- dharma_residuals(model_sim, fit_tot_no_cov, return_DHARMa = TRUE)
 plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
   testDispersion = FALSE)
+
+#extract dharma_residuals results in a dataframe
+gamma_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+
 ```
 All the check are valid so the model don't show any structural issues 
 
@@ -609,6 +618,14 @@ model_sim <- simulate(fit_tot_logN, nsim = 1000, type = "mle-mvn")
 simulationOutput <- dharma_residuals(model_sim, fit_tot_logN, return_DHARMa = TRUE)
 plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
   testDispersion = FALSE)
+
+
+#extract residual in a dataframe
+logn_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
 ```
 All the check are valid so the model don't show any structural issues
 
@@ -660,7 +677,7 @@ CV
 
 In this example, using the predictive log-likelihood  would lead one to conclude that choose the lognormal distribution improves the predictive accuracy of the model from the gamma distribution.
 
-Akaike information criterion
+## Akaike information criterion
 ```{r,echo=F}
 data.frame(
   "AIC"=c("Gamma", AIC(fit_tot_no_cov)),
@@ -668,6 +685,56 @@ data.frame(
 )
 ```
 The AIC comparaison would lead to conclue that the lognormal distribution minimize the information loss.
+
+## Root mean square deviation (RMSD) and mean absolute error (MAE) of a sample
+
+$$\hat{z}\text{ is the simulated variable and } z \text{ is the true observed variable}$$
+$$\text{RMSD} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(\hat{z}(s_i)-z(s_i))^2}$$
+$$\text{MAE} = \frac{1}{n}\sum_{i=1}^{n}|\hat{z}(s_i)-z(s_i)|$$
+
+
+```{r,echo=FALSE}
+RMSD <- function(observed,simulated){
+  sqrt(sum((simulated-observed)^2)/length(observed))
+}
+
+MAE <- function(observed,simulated){
+  sum(abs(simulated-observed)/length(observed))
+}
+
+data_RMSD_MAE <- data.frame()
+for(col in 3:1002){
+  Gamma_RMSD <- RMSD(gamma_residual$observedResponse, gamma_residual[,col])
+  Logn_RMSD <- RMSD(logn_residual$observedResponse, logn_residual[,col])
+  Gamma_MAE <- MAE(gamma_residual$observedResponse, gamma_residual[,col])
+  Logn_MAE <- MAE(logn_residual$observedResponse, logn_residual[,col])
+  data_RMSD_MAE <- rbind(data_RMSD_MAE,
+                         data.frame(Gamma_RMSD,Logn_RMSD,Gamma_MAE,Logn_MAE))
+}
+
+data_RMSD_MAE <- data.frame(
+  RMSD = c(data_RMSD_MAE$Gamma_RMSD,data_RMSD_MAE$Logn_RMSD),
+  MAE = c(data_RMSD_MAE$Gamma_MAE,data_RMSD_MAE$Logn_MAE),
+  model = c(rep("Gamma",1000),rep("LogN",1000))
+)
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = RMSD), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data_RMSD_MAE$RMSD), color = "green")
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = MAE), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data_RMSD_MAE$MAE), color = "green")
+
+```
+
+
+
+
 
 # Compare models with different covariates
 ## Model with a log-normal link function and with chla
