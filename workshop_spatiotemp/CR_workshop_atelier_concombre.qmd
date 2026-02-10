@@ -1,0 +1,1166 @@
+---
+title: "Test_workshop"
+format: html
+editor: visual
+---
+
+# Load libraries and data
+```{r,include=F,echo=F}
+
+# Helper function to install missing packages
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+}
+
+# List of required packages
+required_packages <- c("leaflet","dplyr","waywiser",
+                       "ggplot2","sf", "sdmTMB", "here",
+                       "INLA","viridis","DHARMa","future","patchwork")
+
+# Check and install missing packages
+invisible(lapply(required_packages, install_if_missing))
+
+# Load packages 
+library(dplyr) 
+library(ggplot2) 
+library(sf)
+library(sdmTMB)
+library(leaflet)
+library(INLA)
+library(viridis)
+library(DHARMa)
+library(here)
+library(future)
+library(waywiser)
+library(patchwork)
+
+#here::here()
+```
+
+```{r,include=T,echo=F}
+# ---------------------------------------------
+# MAPS
+# --------------------------------------------- 
+# load the study area
+calcul_area <- readRDS(paste(here(),
+                             "/Data/study_calcul_area.rds",sep=""))
+calcul_area_WG84 <- st_transform(calcul_area, crs = "EPSG:4326")
+# load the terrestrial boundaries
+
+
+# MAPPING ELEMENTS
+leaflet()  %>% 
+  addTiles() %>%
+  setView(-56,45.5, zoom=7) %>%
+  addPolygons(data =calcul_area_WG84, color = "#444444", weight = 1,
+              smoothFactor = 0.5, opacity = 1.0, fillOpacity = 0.5)
+
+
+```
+
+# Load the HOLOTVSPM data 
+The data have been project on the EPSG:4467 / RGSPM06 / UTM zone 21N coordinates system that is the one used for Saint-Pierre and Miquelon. (Visit https://epsg.io/4467)
+
+This is useful since geostatistical modeling will be performed in an equal-distance projection.
+
+```{r,include=T,echo=F}
+data_holotv <- readRDS(
+  paste(here(),"/Data/data_abun_tot_cov.rds",sep = "")
+)
+data_holotv <- data_holotv %>%
+  mutate(X=X/1000) %>%
+  mutate(Y=Y/1000) # the lat and long are in km for modelling
+
+head(data_holotv)
+
+ggplot(data_holotv)+
+  geom_sf(aes(color=log(intensity)), size = 2)+
+    scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 2,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Densité en nb/m² en échelle log")
+```
+The data provide the absolute abundance and the density for each point with the value of the bathymetry and the potential sea floor temperature. 
+We can check the correlation between the density and the bathymetry then with the potential sea floor temperature and the Chl-a concentration.
+```{r,include=T,echo=F}
+ggplot(data=data_holotv, aes(x = intensity, y = bathy)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Density", y = "Depth (m)")
+
+ggplot(data=data_holotv, aes(x = intensity, y = temp)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Density", y = "Bottom temp (°C)")
+
+ggplot(data=data_holotv, aes(x = intensity, y = chla)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Density", y = "Mass concentration of chlorophyll a (mg/m3)")
+```
+
+
+
+# Prepare the grid for prediction
+
+We load the grid of 0.5 km by 0.5 km with the environmental variables.
+```{r,include=T,echo=F}
+grid_bathy <- readRDS(
+  paste(here(),"/Data/grid_bathy.rds",sep = "")
+)
+
+grid_tmp <- readRDS(
+  paste(here(),"/Data/grid_bottom_tmp.rds",sep = "")
+)
+
+grid_chl <- readRDS(
+  paste(here(),"/Data/grid_chl.rds",sep = "")
+)
+
+grid_uo <- readRDS(
+  paste(here(),"/Data/grid_uo.rds",sep = "")
+)
+
+grid_vo <- readRDS(
+  paste(here(),"/Data/grid_vo.rds",sep = "")
+)
+
+# The survey is only in may so we keep the may data
+grid_tmp <- grid_tmp[,grep(pattern = "May",names(grid_tmp))]
+grid_chl <- grid_chl[,grep(pattern = "May",names(grid_chl))]
+grid_uo <- grid_uo[,grep(pattern = "May",names(grid_uo))]
+grid_vo <- grid_vo[,grep(pattern = "May",names(grid_vo))]
+
+# The grid have to be replicated for each year with the environmental covariate values
+grid_tot <- data.frame()
+for (i in 1:5){
+  data <- st_join(grid_tmp[,i],grid_bathy)
+  data <- st_join(data,grid_chl[,i])
+  data <- st_join(data,grid_uo[,i])
+  data <- st_join(data,grid_vo[,i])
+  data <- data %>% mutate(year = 2020+i)
+  names(data) <- c("bottomT","long","lat","bathy","chla","uo","vo","geometry","year")
+  grid_tot <- rbind(grid_tot,data[,c(1,4,5,6,7,2,3,9,8)])
+} # the lat and long are in km for modelling
+
+ggplot(grid_tot)+
+  geom_sf(aes(color=bottomT), size = 2)+
+    scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 2,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Température potentielle du fond")
+
+ggplot(grid_tot)+
+  geom_sf(aes(color=bathy), size = 5)+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  theme(aspect.ratio = 2,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Bathymétrie de la zone")
+
+ggplot(grid_tot)+
+  geom_sf(aes(color=chla), size = 2)+
+    scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 2,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Concentration en chlorophylle a")
+
+```
+
+# Create the mesh for inference with INLA
+```{r, include=T,echo=F}
+#using the grid of the area
+bnd <- INLA::inla.nonconvex.hull(cbind(grid_bathy$long, grid_bathy$lat),
+                                 convex = -0.04)
+bnd2 = INLA::inla.nonconvex.hull(cbind(grid_bathy$long, grid_bathy$lat),
+                                 convex = -0.15)
+
+mesh_inla <- INLA::inla.mesh.2d(
+  loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
+  #loc = as.matrix(as.data.frame(data_holotv)[,c(2,3)]),
+  boundary = list(bnd,bnd2),
+  cutoff = 1.852, # minimum triangle edge length
+  max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
+) # 1.852 is the distance in meter of a mile nautic
+mesh <- make_mesh(as.data.frame(data_holotv), c("X", "Y"), mesh = mesh_inla)
+
+plot(mesh$mesh, main = NA, edge.color = "grey60", asp = 1)
+points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+```
+```{r,include=T,echo=F}
+mesh_inla_min <- INLA::inla.mesh.2d(
+  loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
+  #loc = as.matrix(as.data.frame(data_holotv)[,c(2,3)]),
+  boundary = list(bnd,bnd2),
+  cutoff = 1.852*0.4, # minimum triangle edge length
+  max.edge = c(3*1.852*0.4, 20*1.852), # inner and outer max triangle lengths
+) # 1.852 is the distance in meter of a mile nautic
+mesh_min <- make_mesh(as.data.frame(data_holotv), c("X", "Y"), mesh = mesh_inla_min)
+
+mesh_inla_max <- INLA::inla.mesh.2d(
+  loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
+  #loc = as.matrix(as.data.frame(data_holotv)[,c(2,3)]),
+  boundary = list(bnd,bnd2),
+  cutoff = 1.852*2.5, # minimum triangle edge length
+  max.edge = c(3*1.852*2.5, 20*1.852), # inner and outer max triangle lengths
+) # 1.852 is the distance in meter of a mile nautic
+mesh_max <- make_mesh(as.data.frame(data_holotv), c("X", "Y"), mesh = mesh_inla_max)
+
+plot(mesh_min$mesh, main = NA, edge.color = "grey60", asp = 1)
+plot(mesh_max$mesh, main = NA, edge.color = "grey60", asp = 1)
+```
+
+
+# Linear model 
+We want to test if the the data have a spatial correlation.
+```{r}
+data <- as.data.frame(data_holotv)[,seq(1,ncol(data_holotv)-1,1)]
+
+fit_tot <- sdmTMB(
+  intensity ~ 1+bathy,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "off"
+  )
+
+```
+
+```{r, echo=F}
+sanity(fit_tot)
+```
+
+## Check the residual
+```{r, echo=F}
+data$resids <- residuals(fit_tot)
+hist(data$resids)
+
+qqnorm(data$resids)
+abline(a = 0, b = 1)
+```
+
+```{r}
+ggplot(data, aes(X, Y, col = resids)) + scale_colour_gradient2() +
+  geom_point() + facet_wrap(~year) + coord_fixed() +theme(aspect.ratio = 3)
+```
+
+
+# Description of the tested model
+
+**Common features :**
+
+-   Link function : log
+
+-   Observation model family : Gamma
+
+-   Mesh define directly with INLA: mesh (see above)
+
+-   Spatial random fields : Multivariate normal distribution with Matérn covariance
+
+-   Spatiotemporal random fields : First-order auto regressive - AR(1)
+
+**General form of the model**
+
+see detail [here](https://cran.r-project.org/web/packages/sdmTMB/vignettes/model-description.html) :
+
+Let  $Y(s_{i},t_i)=Y_{\boldsymbol{s},t}$ be the random variable associated with the i-th density at spatial location $s_i$, where $s_i = (x_i,y_i)$ are the spatial coordinates and at the time $t_i$, where $t_i$ is the year. $Y_i$ then follows a Gamma distribution with a shape parameter $ \alpha$ and a scale parameter $\theta$, such that the model can be written as
+$$
+Y_{\boldsymbol{s},t} \sim Gamma(\alpha,\theta)
+$$
+$$
+{E}[Y_{\boldsymbol{s},t}] = \alpha\theta = \mu_{\boldsymbol{s},t}=\boldsymbol{S}
+$$
+$$
+log(\boldsymbol{S}) = \underbrace{c}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Field}} +\underbrace{\delta_{\boldsymbol{s},t}}_{\text{Spatio-temporal Field}}
+$$
+The spatial random fields follow a Gaussian Markov random field with Matérn covariance :
+$$
+\omega \sim \mathcal{MG}(0,\Sigma)
+$$
+First-order auto regressive, AR(1), spatiotemporal random fields add a parameter defining the correlation between random field deviations from one time step to the next :
+$$
+\delta_{t=1} = U_{t=1} \sim \mathcal{MG}(0,\Sigma)
+$$
+
+$$
+\delta_{t>1} \sim \rho\delta_{t-1}+\sqrt[]{1-\rho^2}U_t,\text{ } U_t \sim \mathcal{MG}(0,\Sigma)
+$$
+
+In the outputs:
+
+-   sigma_O=spatial SD : marginal standard deviation of ω
+
+-   sigma_E=Spatiotemporal SD : marginal standard deviation of ϵ
+
+
+
+# Models comparison with or without covariates
+## Model with bathy
+```{r}
+
+fit_tot_bathy <- sdmTMB(
+  intensity ~ 1+bathy,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_bathy)
+```
+
+### Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_bathy)
+```
+### Check residuals
+```{r,echo=F}
+set.seed(seed = 14)
+model_sim <- simulate(fit_tot_bathy, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot_bathy, return_DHARMa = TRUE)
+plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+#extract residual in a dataframe
+bathy_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+```
+
+
+## Model with temp
+```{r}
+
+fit_tot_temp <- sdmTMB(
+  intensity ~ 1+temp,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_temp)
+```
+
+### Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_temp)
+```
+### Check residuals
+```{r,echo=F}
+set.seed(seed = 14)
+model_sim <- simulate(fit_tot_temp, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot_temp, return_DHARMa = TRUE)
+plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+#extract residual in a dataframe
+temp_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+```
+
+
+## Model without
+```{r}
+
+fit_tot_no_cov <- sdmTMB(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_no_cov)
+```
+
+### Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_no_cov)
+```
+### Check residuals
+```{r,echo=F}
+set.seed(seed = 14)
+model_sim <- simulate(fit_tot_no_cov, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot_no_cov, return_DHARMa = TRUE)
+plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+#extract residual in a dataframe
+no_cov_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+```
+
+
+## Compare the models
+### Cross validation
+We will use the cross-validation to compare the 2 models
+```{r,echo=F,include=F}
+plan(multisession, workers = 2)
+
+
+#cluster by time and space 
+k <- 8
+clust_2021 <- kmeans(data %>% filter(year==2021)%>%select(X,Y), k)$cluster
+clust_2022 <- kmeans(data %>% filter(year==2022)%>%select(X,Y), k)$cluster
+clust_2023 <- kmeans(data %>% filter(year==2023)%>%select(X,Y), k)$cluster
+clust_2025 <- kmeans(data %>% filter(year==2025)%>%select(X,Y), k)$cluster
+clust <- c(clust_2021,clust_2022+k,clust_2023+(k*2),clust_2025+(k*3))
+data$clust <- clust
+
+m_cv_bathy <- sdmTMB_cv(
+  intensity ~ 1+bathy,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust
+  #k_folds = 24
+)
+
+m_cv_temp <- sdmTMB_cv(
+  intensity ~ 1+temp,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust
+  #k_folds = 24
+)
+
+m_cv_no_cov <- sdmTMB_cv(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust 
+)
+```
+Lots of measures of predictive accuracy can be used to evaluate model performance. By default, sdmTMB_cv() returns a list that contains the sum of the log likelihoods for each left-out fold and the total summed across the left-out folds.
+To compare the models, we will check the Total log-likelihood, the Root Mean Square Error (RMSE) and 
+the Mean Absolute Error (MAE)
+```{r,echo=F}
+CV <- data.frame(
+  "total_log-likelihood"=c(m_cv_bathy$sum_loglik,m_cv_temp$sum_loglik,m_cv_no_cov$sum_loglik),
+  "Root_Mean_Square_Error"=c(sqrt(mean((m_cv_bathy$data$intensity - m_cv_bathy$data$cv_predicted)^2)),
+                             sqrt(mean((m_cv_temp$data$intensity - m_cv_temp$data$cv_predicted)^2)),
+                             sqrt(mean((m_cv_no_cov$data$intensity - m_cv_no_cov$data$cv_predicted)^2))),
+  "Mean_Absolute_Error"=c(mean(abs(m_cv_bathy$data$intensity - m_cv_bathy$data$cv_predicted)),
+                          mean(abs(m_cv_temp$data$intensity - m_cv_temp$data$cv_predicted)),
+                          mean(abs(m_cv_no_cov$data$intensity - m_cv_no_cov$data$cv_predicted)))
+)
+row.names(CV) <- c("Bathy","Temp","No_cov")
+CV
+
+```
+
+
+### Akaike information criterion
+```{r,echo=F}
+data.frame(
+  "AIC"=c("Bathy", AIC(fit_tot_bathy)),
+  "AIC"=c("Temp", AIC(fit_tot_temp)),
+  "AIC"=c("No_cov", AIC(fit_tot_no_cov))
+)
+```
+
+### Root mean square deviation (RMSD) and mean absolute error (MAE) of a sample
+```{r,echo=FALSE}
+RMSD <- function(observed,simulated){
+  sqrt(sum((simulated-observed)^2)/length(observed))
+}
+
+MAE <- function(observed,simulated){
+  sum(abs(simulated-observed)/length(observed))
+}
+
+data_RMSD_MAE <- data.frame()
+for(col in 3:1002){
+  bathy_RMSD <- RMSD(bathy_residual$observedResponse, bathy_residual[,col])
+  temp_RMSD <- RMSD(temp_residual$observedResponse, temp_residual[,col])
+  no_cov_RMSD <- RMSD(no_cov_residual$observedResponse, no_cov_residual[,col])
+  bathy_MAE <- MAE(bathy_residual$observedResponse, bathy_residual[,col])
+  temp_MAE <- MAE(temp_residual$observedResponse, temp_residual[,col])
+  no_cov_MAE <- MAE(no_cov_residual$observedResponse, no_cov_residual[,col])
+  data_RMSD_MAE <- rbind(data_RMSD_MAE,
+                         data.frame(bathy_RMSD,temp_RMSD,no_cov_RMSD,
+                                    bathy_MAE,temp_MAE,no_cov_MAE))
+}
+
+data_RMSD_MAE <- data.frame(
+  RMSD = c(data_RMSD_MAE$bathy_RMSD,data_RMSD_MAE$temp_RMSD,data_RMSD_MAE$no_cov_RMSD),
+  MAE = c(data_RMSD_MAE$bathy_MAE,data_RMSD_MAE$temp_MAE,data_RMSD_MAE$no_cov_MAE),
+  model = c(rep("Bathy",1000),rep("Temp",1000),rep("No_cov",1000))
+)
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = RMSD), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = MAE), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+```
+
+## Model with spline
+```{r,echo=F}
+
+fit_tot_spline <- sdmTMB(
+  intensity ~ 1+s(temp),#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+sanity(fit_tot_spline)
+```
+
+# Compare Lognormal distribution model and Gamma distribution model
+## Model with a Gamma distribution without covariates
+```{r,include=F}
+fit_tot_no_cov <- sdmTMB(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_no_cov)
+```
+Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_no_cov)
+```
+Use the Dharma package to check the residuals 
+```{r, echo=F}
+set.seed(seed = 14)
+model_sim <- simulate(fit_tot_no_cov, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot_no_cov, return_DHARMa = TRUE)
+plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+#extract dharma_residuals results in a dataframe
+gamma_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+
+```
+All the check are valid so the model don't show any structural issues 
+
+## Model with a log-normal link function without covariate
+```{r,echo=F}
+#data <- as.data.frame(data_holotv)[,seq(1,ncol(data_holotv)-1,1)]
+
+fit_tot_logN <- sdmTMB(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = lognormal(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot_logN)
+```
+Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot_logN)
+```
+
+Use the Dharma package to check the residuals 
+```{r, echo=F}
+set.seed(seed = 14)
+model_sim <- simulate(fit_tot_logN, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot_logN, return_DHARMa = TRUE)
+plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+
+#extract residual in a dataframe
+logn_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+```
+All the check are valid so the model don't show any structural issues
+
+## Cross validation
+We will use the cross-validation to compare the 2 models
+```{r,echo=F,include=F}
+plan(multisession, workers = 2)
+
+m_cv_no_cov <- sdmTMB_cv(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust 
+)
+
+m_cv_logN <- sdmTMB_cv(
+  intensity ~ 1,#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = lognormal(link = "log"),
+  spatial = "on",
+  time = "year",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = clust
+  #k_folds = 24
+)
+```
+Lots of measures of predictive accuracy can be used to evaluate model performance. By default, sdmTMB_cv() returns a list that contains the sum of the log likelihoods for each left-out fold and the total summed across the left-out folds.
+To compare the models, we will check the Total log-likelihood, the Root Mean Square Error (RMSE) and 
+the Mean Absolute Error (MAE)
+```{r,echo=F}
+CV <- data.frame(
+  "total_log-likelihood"=c(m_cv_no_cov$sum_loglik,m_cv_logN$sum_loglik),
+  "Root_Mean_Square_Error"=c(sqrt(mean((m_cv_no_cov$data$intensity - m_cv_no_cov$data$cv_predicted)^2)),
+                             sqrt(mean((m_cv_logN$data$intensity - m_cv_logN$data$cv_predicted)^2))),
+  "Mean_Absolute_Error"=c(mean(abs(m_cv_no_cov$data$intensity - m_cv_no_cov$data$cv_predicted)),
+                          mean(abs(m_cv_logN$data$intensity - m_cv_logN$data$cv_predicted)))
+)
+row.names(CV) <- c("Gamma","Lognormal")
+CV
+```
+``
+
+In this example, using the predictive log-likelihood  would lead one to conclude that choose the lognormal distribution improves the predictive accuracy of the model from the gamma distribution.
+
+## Akaike information criterion
+```{r,echo=F}
+data.frame(
+  "AIC"=c("Gamma", AIC(fit_tot_no_cov)),
+  "AIC"=c("Lognormal", AIC(fit_tot_logN))
+)
+```
+The AIC comparaison would lead to conclue that the lognormal distribution minimize the information loss.
+
+## Root mean square deviation (RMSD) and mean absolute error (MAE) of a sample
+
+```{r,echo=FALSE}
+RMSD <- function(observed,simulated){
+  sqrt(sum((simulated-observed)^2)/length(observed))
+}
+
+MAE <- function(observed,simulated){
+  sum(abs(simulated-observed)/length(observed))
+}
+
+data_RMSD_MAE <- data.frame()
+for(col in 3:1002){
+  Gamma_RMSD <- RMSD(gamma_residual$observedResponse, gamma_residual[,col])
+  Logn_RMSD <- RMSD(logn_residual$observedResponse, logn_residual[,col])
+  Gamma_MAE <- MAE(gamma_residual$observedResponse, gamma_residual[,col])
+  Logn_MAE <- MAE(logn_residual$observedResponse, logn_residual[,col])
+  data_RMSD_MAE <- rbind(data_RMSD_MAE,
+                         data.frame(Gamma_RMSD,Logn_RMSD,Gamma_MAE,Logn_MAE))
+}
+
+data_RMSD_MAE <- data.frame(
+  RMSD = c(data_RMSD_MAE$Gamma_RMSD,data_RMSD_MAE$Logn_RMSD),
+  MAE = c(data_RMSD_MAE$Gamma_MAE,data_RMSD_MAE$Logn_MAE),
+  model = c(rep("Gamma",1000),rep("LogN",1000))
+)
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = RMSD), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = MAE), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+```
+
+
+# Abundance with offset
+
+The data provide the absolute abundance and the density for each point with the value of the bathymetry and the potential sea floor temperature. 
+
+The sampled surfaces for each station varies between years . In 2021 and 2022 , the surfaces follow a almost normal distributions, with few outliers, while in 2025 the probability of sampling larger and smaller area is almost constant. This is confirmed by the calulation of varaition coefficient ranging between  30 and 40% (std relative to the average)
+
+```{r,include=T,echo=F}
+
+coeff_disp<-data_holotv%>%
+    group_by(year)%>%
+    summarise(cv=sd(area)/mean(area))
+
+ggplot(data=data_holotv, aes( x = area, group=year,fill=as.factor(year),col=as.factor(year))) +
+  geom_histogram() +
+  facet_wrap(~ year) +
+  labs(y = "", x = "Surface  (m^2)")
+```
+
+The density shows a right skewness 
+
+We can check the correlation between the density (intensity ) and the sampled surface by year.  Looking at the Speamann coefficinent  we notice a negative correlation (-0.63, -0.29) between denity and surface
+
+```{r,include=T,echo=F}
+pintensity<-ggplot(data=data_holotv, aes(y = intensity, x = area, group=year,fill=as.factor(year),col=as.factor(year))) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(y = "Density", x = "Surface  (m^2)")
+
+pabun<-ggplot(data=data_holotv, aes(y = abun, x = area, group=year,fill=as.factor(year),col=as.factor(year))) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(y = "Abundance", x = "Surface  (m^2)")
+
+p1<- pabun+pintensity
+p1
+```
+
+## Model with offset
+```{r}
+data$time <- data$year
+
+fit_tot <- sdmTMB(
+  intensity ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+fit_totnb <- sdmTMB(
+  abun ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = nbinom2(link = "log"),
+  spatial = "on",
+  offset = log(data$area),
+  time = "time",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+```
+
+```{r}
+summary(fit_tot)
+```
+
+```{r}
+summary(fit_totnb)
+```
+## Check the convergence with sanity
+```{r}
+sanity(fit_tot)
+```
+
+```{r}
+sanity(fit_totnb)
+```
+
+### Check the residual
+```{r, echo=F}
+set.seed(123)
+data$resids <- residuals(fit_tot)
+data$residsnb <- residuals(fit_totnb)
+
+resid_old<-ggplot(data=data,aes(x=resids,y = after_stat(density)))+geom_histogram()+geom_density()
+resid_neg<-ggplot(data=data,aes(x=residsnb,y = after_stat(density)))+geom_histogram()+geom_density()
+
+qlines<-ggplot(data=data,aes(sample=resids))+stat_qq(col="red")+stat_qq(aes(sample=residsnb),col="green")+geom_abline(intercept=0,slope=1)
+
+
+pres<-(resid_old+resid_neg)/qlines
+pres
+```
+
+
+```{r}
+resdtot<-ggplot(data, aes(X, Y, col = resids)) + scale_colour_gradient2() +
+  geom_point() + facet_wrap(~year) + coord_fixed() +theme(aspect.ratio = 3)+
+  ggtitle("Density model")
+resdtotnb<-ggplot(data, aes(X, Y, col = residsnb)) + scale_colour_gradient2() +
+  geom_point() + facet_wrap(~year) + coord_fixed() +theme(aspect.ratio = 3)+
+  ggtitle("Abundance model with offset")
+
+poltres<-resdtot+resdtotnb
+poltres
+```
+Use the Dharma package to check the residuals 
+```{r, echo=F}
+set.seed(seed = 14)
+model_sim <- simulate(fit_tot, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot, return_DHARMa = TRUE)
+plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+
+model_simnb <- simulate(fit_totnb, nsim = 1000, type = "mle-mvn")
+simulationOutputnb <- dharma_residuals(model_simnb, fit_totnb, return_DHARMa = TRUE)
+plotQQunif(simulationOutputnb, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+
+```
+
+## Cross validation
+```{r,echo=F,include=F}
+plan(multisession, workers = 2)
+
+#cluster by time and space 
+k <- 8
+clust_2021 <- kmeans(data %>% filter(year==2021)%>%select(X,Y), k)$cluster
+clust_2022 <- kmeans(data %>% filter(year==2022)%>%select(X,Y), k)$cluster
+clust_2023 <- kmeans(data %>% filter(year==2023)%>%select(X,Y), k)$cluster
+clust_2025 <- kmeans(data %>% filter(year==2025)%>%select(X,Y), k)$cluster
+clust <- c(clust_2021,clust_2022+k,clust_2023+(k*2),clust_2025+(k*3))
+data$clust <- clust
+
+
+
+set.seed(42)
+m_cv <- sdmTMB_cv(
+  intensity ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = "clust"
+)
+
+# Convert to sf format for spatial assessment
+cv_sf <- cv_to_waywiser(m_cv, ll_names = c("X", "Y"),ll_crs = 4467,
+                        utm_crs =4467)
+
+
+data$loga<-log(data$area)
+
+m_cv_nb <- sdmTMB_cv(
+  abun ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data,
+  mesh = mesh,
+  family = nbinom2(),
+  offset="loga",
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  fold_ids = "clust"
+)
+
+# Convert to sf format for spatial assessment
+cv_sf_nb <- cv_to_waywiser(m_cv_nb, ll_names = c("X", "Y"),ll_crs = 4467,
+                        utm_crs =4467)
+
+```
+
+
+
+Lots of measures of predictive accuracy can be used to evaluate model performance. By default, sdmTMB_cv() returns a list that contains the sum of the log likelihoods for each left-out fold and the total summed across the left-out folds.
+
+```{r,echo=F}
+CV <- data.frame(
+  "total_log-likelihood"=c(m_cv$sum_loglik,m_cv_nb$sum_loglik),
+  "Root_Mean_Square_Error"=c(sqrt(mean((m_cv$data$intensity - m_cv$data$cv_predicted)^2)),
+     sqrt(mean((m_cv_nb$data$intensity - m_cv_nb$data$cv_predicted/m_cv_nb$data$area)^2))),
+  "Mean_Absolute_Error"=c(mean(abs(m_cv$data$intensity - m_cv$data$cv_predicted)),
+                         mean(abs(m_cv_nb$data$intensity - m_cv_nb$data$cv_predicted/m_cv_nb$data$area)))
+)
+row.names(CV) <- c("Gamma","NegBin")
+CV
+```
+``
+
+In this example, using the predictive log-likelihood  would lead one to conclude that choose the lognormal distribution improves the predictive accuracy of the model from the gamma distribution.
+
+## Root mean square deviation (RMSD) and mean absolute error (MAE) of a sample
+
+
+To compare in the 2 models , we consider in both cases the intensity
+
+```{r,echo=FALSE}
+
+old_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+
+
+nb_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutputnb$observedResponse,
+  as.data.frame(simulationOutputnb$simulatedResponse)
+  )
+
+RMSD <- function(observed,simulated){
+  sqrt(sum((simulated-observed)^2)/length(observed))
+}
+
+MAE <- function(observed,simulated){
+  sum(abs(simulated-observed)/length(observed))
+}
+
+data_RMSD_MAE <- data.frame()
+for(col in 3:1002){
+  Gamma_RMSD <- RMSD(old_residual$observedResponse, old_residual[,col])
+  NegBin_RMSD <- RMSD(nb_residual$observedResponse/data$area, nb_residual[,col]/data$area)
+  Gamma_MAE <- MAE(old_residual$observedResponse, old_residual[,col])
+  NegBin_MAE <- MAE(nb_residual$observedResponse/data$area, nb_residual[,col]/data$area)
+  data_RMSD_MAE <- rbind(data_RMSD_MAE,
+                         data.frame(Gamma_RMSD,NegBin_RMSD,Gamma_MAE,NegBin_MAE))
+}
+
+
+data_RMSD_MAE <- data.frame(
+  RMSD = c(data_RMSD_MAE$Gamma_RMSD,data_RMSD_MAE$NegBin_RMSD),
+  MAE = c(data_RMSD_MAE$Gamma_MAE,data_RMSD_MAE$NegBin_MAE),
+  model = c(rep("Gamma",1000),rep("NegBin",1000))
+)
+
+PlotRMSD<-ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = RMSD), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+PlotMAE<-ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = MAE), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+perrors<-PlotRMSD/PlotMAE 
+perrors
+```
+
+## Prediction 
+```{r,echo=F}
+grid <- as.data.frame(grid_tot)[,seq(1,ncol(grid_tot)-1,1)]
+names(grid)[c(1,6,7)] <- c("temp","X","Y")
+grid$time <- grid$year
+
+predictions <- predict(fit_tot, newdata = grid %>% filter(year!=2024),
+                       return_tmb_object = TRUE)
+
+
+predictions_nb <- predict(fit_totnb, newdata = grid %>% filter(year!=2024),
+                       return_tmb_object = TRUE)
+
+#Let’s make a small function to make maps
+plot_map <- function(dat, column) {
+  ggplot(dat, aes(X, Y, fill = {{ column }})) +
+    geom_raster() +
+    facet_wrap(~year, nrow = 1) +
+    coord_fixed()+
+    theme(aspect.ratio = 3)
+}
+```
+
+There are four kinds of predictions that we get out of the model. First we will show the predictions that incorporate all fixed effects and random effects:
+
+```{r}
+pold<-plot_map(predictions$data, exp(est)) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  ggtitle("Prediction (fixed effects + random) for Gamma")
+
+pnb<-plot_map(predictions_nb$data, exp(est)) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  ggtitle("Prediction (fixed effects + random) for Nbinom")
+
+pold
+pnb
+
+# plot the density as sequential data
+#cut_min <- trunc(exp(predictions$data$est))
+#cut_max <- cut_min+1
+#cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
+#
+#for (i in 1:length(cuts)){
+#  if (cuts[i]=="(8-9]"){
+#    cuts[i] <- ">8"
+#  }
+#  if (cuts[i]=="(9-10]"){
+#    cuts[i] <- ">8"
+#  }
+#}
+#
+#predictions$data$cuts <- as.factor(cuts)
+#
+#ggplot(predictions$data, aes(X, Y, fill = cuts)) +
+#    geom_raster() +
+#    scale_fill_brewer("Density", type = "seq", palette = "YlOrRd")+
+#    facet_wrap(~year, nrow = 1) +
+#    coord_fixed()+
+#    theme(aspect.ratio = 3)+
+#    ggtitle("Prediction (fixed effects + all random effects)")
+```
+
+```{r}
+pold<-plot_map(predictions$data, omega_s) +
+   ggtitle("Spatial random effects only Gamma") +
+  scale_fill_gradient2()
+
+
+pnb<-plot_map(predictions_nb$data, omega_s) +
+  ggtitle("Spatial random effects only NegBin") +
+  scale_fill_gradient2()
+
+
+pfixed_effects<-pold/pnb
+pfixed_effects
+```
+
+And finally we can look at the spatiotemporal random effects that represent deviation from the fixed effect predictions and the spatial random effect deviations. These represent biotic and abiotic factors that are changing through time and are not accounted for in the model.
+
+```{r}
+pold<-plot_map(predictions$data, epsilon_st) +
+   ggtitle("Spatiotemporal random effects only Gamma") +
+  scale_fill_gradient2()
+
+
+pnb<-plot_map(predictions_nb$data, epsilon_st) +
+  ggtitle("Spatiotemporal random effects only NegBin") +
+  scale_fill_gradient2()
+
+
+pfixed_effects<-pold/pnb
+pfixed_effects
+```
+
+## Total abundance calculation A presenter
+
+When we ran our predict.sdmTBM() function, it also returned a report from TMB in the output because we included return_tmb_object = TRUE. We can then run our get_index() function to extract the total abundance calculations and standard errors.
+
+We will need to set the area argument to 0.25 km2 since our grid cells are 0.5 km x 0.5 km. If some grid cells were not fully in the survey domain (or were on land), we could feed a vector of grid areas to the area argument that matched the number of grid cells.
+
+```{r, echo=FALSE}
+index <- get_index(predictions, area = 250000, bias_correct = TRUE)
+index$Model<-"Gamma"
+index$alpha<-0.8
+# be careful our prediction is in nb/m² so area have to be in m²
+index_nb <- get_index(predictions_nb, area = 250000, bias_correct = TRUE)
+index_nb$Model<-"NegBin"
+index_nb$alpha<-0.4
+indextot<-rbind(index,index_nb)
+plotpred<-ggplot(indextot, aes(time, est, fill=Model,col=Model)) + geom_line() +
+  geom_ribbon(aes(ymin = lwr, ymax = upr),alpha=0.5) +
+  xlab('Year') + ylab('Abundance estimate (nombre)')
+plotpred
+
+```
