@@ -125,7 +125,7 @@ tracks <- data.frame(
 count_tot <- read.csv(paste(here(),
                             "/via3_data_exploration/Data/HOLOTVSPM2025.csv",
                             sep=""), 
-                      sep = ",", header = TRUE, skip = 13)
+                      sep = ";", header = TRUE, skip = 13)
 count_tot <- count_tot %>%
   filter(!is.na(x = Date))
 
