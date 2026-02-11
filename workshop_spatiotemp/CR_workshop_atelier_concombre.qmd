@@ -1,7 +1,7 @@
 ---
 title: "Test_workshop"
 format: html
-editor: visual
+editor: source
 ---
 
 # Load libraries and data
