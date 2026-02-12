@@ -59,14 +59,27 @@ data_annot <- data_annot %>%
 data_annot$annotation_rate <- data_annot$Seconds_Read/data_annot$haul_duration
 
 
-## Prepare the dataframe for the model ####
+## Prepare the dataframe to compil the information ####
 dat <-  merge(data_annot,data_coordinates,by="STN")
-#calculate surface sampled and density
+#calculate surface sampled for density
 dat$annotation_distance <- dat$annotation_rate*dat$haul_distance
 dat$surface <- dat$annotation_distance*field_view
 
-dat$density <- dat$Total_Number*mean_weight/(
+#convert the time of annotation start in second
+dat$Time.annotation_start <- as.POSIXlt(dat$Time.annotation_start,
+                                        format = "%H:%M:%S")
+dat$Time.annotation_start <- dat$Time.annotation_start$min*60 +
+  dat$Time.annotation_start$sec
+
+dat$Distance.annotation_start <- (dat$Time.annotation_start/dat$haul_duration)*
+  dat$haul_distance
+
+dat$biomass_density <- dat$Total_Number*mean_weight/(
   dat$surface)#/1e+06) #density in kg/km2
+
+dat <- dat%>% select(
+  c(1,2,3,4,16,26,5,6,7,17,27,29,10,30,28,11,9,8,12,13,14,15,18,19,20,21,22,23,24,25)
+)
 
 saveRDS(dat, 
         paste(here(),
