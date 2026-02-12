@@ -1,4 +1,4 @@
-# This code create a first approach to sdmTMB model for biomass with abunx0.4
+# This code create a second approach to sdmTMB model for biomass with abunx0.4
 
 library(here)
 library(sf)
