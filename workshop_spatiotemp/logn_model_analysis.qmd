@@ -1,0 +1,570 @@
+---
+title: "Deeper_analysis_logn"
+format: html
+editor: source
+---
+
+# Load libraries and data
+```{r,include=F,echo=F}
+
+# Helper function to install missing packages
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+}
+
+# List of required packages
+required_packages <- c("leaflet","dplyr","waywiser",
+                       "ggplot2","sf", "sdmTMB", "here",
+                       "INLA","viridis","DHARMa","future","patchwork")
+
+# Check and install missing packages
+invisible(lapply(required_packages, install_if_missing))
+
+# Load packages 
+library(dplyr) 
+library(ggplot2) 
+library(sf)
+library(sdmTMB)
+library(leaflet)
+library(INLA)
+library(viridis)
+library(DHARMa)
+library(here)
+library(future)
+library(waywiser)
+library(patchwork)
+
+#here::here()
+```
+
+```{r,include=T,echo=F}
+# ---------------------------------------------
+# MAPS
+# --------------------------------------------- 
+# load the study area
+calcul_area <- readRDS(paste(here(),
+                             "/Data/study_calcul_area.rds",sep=""))
+calcul_area_WG84 <- st_transform(calcul_area, crs = "EPSG:4326")
+# load the terrestrial boundaries
+
+
+# MAPPING ELEMENTS
+leaflet()  %>% 
+  addTiles() %>%
+  setView(-56,45.5, zoom=7) %>%
+  addPolygons(data =calcul_area_WG84, color = "#444444", weight = 1,
+              smoothFactor = 0.5, opacity = 1.0, fillOpacity = 0.5)
+
+
+```
+
+# Load the HOLOTVSPM data 
+The data have been project on the EPSG:4467 / RGSPM06 / UTM zone 21N coordinates system that is the one used for Saint-Pierre and Miquelon. (Visit https://epsg.io/4467)
+
+This is useful since geostatistical modeling will be performed in an equal-distance projection.
+
+```{r,include=T,echo=F}
+data_holotv <- readRDS(
+  paste(here(),"/Data/data_abun_tot_cov.rds",sep = "")
+)
+data_holotv <- data_holotv %>%
+  mutate(X=X/1000) %>%
+  mutate(Y=Y/1000) # the lat and long are in km for modelling
+
+head(data_holotv)
+
+ggplot(data_holotv)+
+  geom_sf(aes(color=log(intensity)), size = 2)+
+    scale_color_viridis()+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  facet_wrap(~year, ncol=2)+
+  theme(aspect.ratio = 2,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Densité en nb/m² en échelle log")
+```
+
+
+# Prepare the grid for prediction
+
+We load the grid of 0.5 km by 0.5 km with the environmental variables.
+```{r,include=T,echo=F}
+grid_bathy <- readRDS(
+  paste(here(),"/Data/grid_bathy.rds",sep = "")
+)
+
+# The grid have to be replicated for each year with the environmental covariate values
+grid_tot <- data.frame()
+for (i in 1:5){
+  data <- grid_bathy
+  data <- data %>% mutate(year = 2020+i)
+  grid_tot <- rbind(grid_tot,data)
+} # the lat and long are in km for modelling
+
+ggplot(grid_tot)+
+  geom_sf(aes(color=bathy), size = 5)+
+  geom_sf(data=calcul_area, fill = "#11111111")+
+  theme(aspect.ratio = 2,
+        legend.title = element_blank(),
+        title = element_text(color = "black",face = "bold"),
+        plot.title = element_text( size = 12, hjust = 0.5),
+        plot.subtitle = element_text(size = 8,hjust = 0.5),
+        panel.border = element_blank(),
+        panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
+                                        colour = "white"))+
+  labs(title = "Bathymétrie de la zone")
+
+
+```
+
+# Create the mesh for inference with INLA
+```{r, include=T,echo=F}
+#using the grid of the area
+bnd <- INLA::inla.nonconvex.hull(cbind(grid_bathy$long, grid_bathy$lat),
+                                 convex = -0.04)
+bnd2 = INLA::inla.nonconvex.hull(cbind(grid_bathy$long, grid_bathy$lat),
+                                 convex = -0.15)
+
+mesh_inla <- INLA::inla.mesh.2d(
+  loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
+  #loc = as.matrix(as.data.frame(data_holotv)[,c(2,3)]),
+  boundary = list(bnd,bnd2),
+  cutoff = 1.852, # minimum triangle edge length
+  max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
+) # 1.852 is the distance in meter of a mile nautic
+mesh <- make_mesh(as.data.frame(data_holotv), c("X", "Y"), mesh = mesh_inla)
+
+plot(mesh$mesh, main = NA, edge.color = "grey60", asp = 1)
+points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+```
+
+
+# Description of the tested model
+
+**Common features :**
+
+-   Link function : log
+
+-   Observation model family : Gamma
+
+-   Mesh define directly with INLA: mesh (see above)
+
+-   Spatial random fields : Multivariate normal distribution with Matérn covariance
+
+-   Spatiotemporal random fields : First-order auto regressive - AR(1)
+
+**General form of the model**
+
+see detail [here](https://cran.r-project.org/web/packages/sdmTMB/vignettes/model-description.html) :
+
+Let  $Y(s_{i},t_i)=Y_{\boldsymbol{s},t}$ be the random variable associated with the i-th density at spatial location $s_i$, where $s_i = (x_i,y_i)$ are the spatial coordinates and at the time $t_i$, where $t_i$ is the year. $Y_i$ then follows a Gamma distribution with a shape parameter $ \alpha$ and a scale parameter $\theta$, such that the model can be written as
+$$
+Y_{\boldsymbol{s},t} \sim Lognormal(\alpha,\theta)
+$$
+$$
+{E}[Y_{\boldsymbol{s},t}] = \exp(\alpha+\frac{\theta^2}{2}) = \mu_{\boldsymbol{s},t}=\boldsymbol{S}
+$$
+$$
+log(\boldsymbol{S}) = \underbrace{c}_{\text{Intercept}}+ \underbrace{\boldsymbol{X}_{\boldsymbol{s},t}\boldsymbol{\beta}}_{\text{Fixed Effects}}+\underbrace{\omega_{\boldsymbol{s}}}_{\text{Spatial Field}} +\underbrace{\delta_{\boldsymbol{s},t}}_{\text{Spatio-temporal Field}}
+$$
+The spatial random fields follow a Gaussian Markov random field with Matérn covariance :
+$$
+\omega \sim \mathcal{MG}(0,\Sigma)
+$$
+First-order auto regressive, AR(1), spatiotemporal random fields add a parameter defining the correlation between random field deviations from one time step to the next :
+$$
+\delta_{t=1} = U_{t=1} \sim \mathcal{MG}(0,\Sigma)
+$$
+
+$$
+\delta_{t>1} \sim \rho\delta_{t-1}+\sqrt[]{1-\rho^2}U_t,\text{ } U_t \sim \mathcal{MG}(0,\Sigma)
+$$
+
+In the outputs:
+
+-   sigma_O=spatial SD : marginal standard deviation of ω
+
+-   sigma_E=Spatiotemporal SD : marginal standard deviation of ϵ
+
+
+
+# Model lognormal to estimate abundance
+```{r,include=F}
+data <- as.data.frame(data_holotv)[,seq(1,ncol(data_holotv)-1,1)]
+data$time <- data$year
+
+fit_tot <- sdmTMB(
+  intensity ~ 1+as.factor(year),#<< intercept value per time
+  data = data,
+  mesh = mesh,
+  family = lognormal(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "ar1",#<< setting an AR(1) spatiotemporal process
+  extra_time = c(2024),#<< our list of extra years to be included
+  )
+
+```
+
+```{r,echo=F}
+summary(fit_tot)
+```
+Check the convergence with sanity
+```{r, echo=F}
+sanity(fit_tot)
+```
+Use the Dharma package to check the residuals 
+```{r, echo=F}
+set.seed(seed = 14)
+model_sim <- simulate(fit_tot, nsim = 1000, type = "mle-mvn")
+simulationOutput <- dharma_residuals(model_sim, fit_tot, return_DHARMa = TRUE)
+plotQQunif(simulationOutput, testUniformity = FALSE, testOutliers = FALSE,
+  testDispersion = FALSE)
+
+#extract dharma_residuals results in a dataframe
+logn_residual <- data.frame(
+  "year" = data$year,
+  "observedResponse" = simulationOutput$observedResponse,
+  as.data.frame(simulationOutput$simulatedResponse)
+  )
+
+```
+All the check are valid so the model don't show any structural issues 
+
+## Root mean square deviation (RMSD) and mean absolute error (MAE) of a sample
+
+```{r,echo=FALSE}
+RMSD <- function(observed,simulated){
+  sqrt(sum((simulated-observed)^2)/length(observed))
+}
+
+MAE <- function(observed,simulated){
+  sum(abs(simulated-observed)/length(observed))
+}
+
+data_RMSD_MAE <- data.frame()
+for(col in 3:1002){
+  Logn_RMSD <- RMSD(logn_residual$observedResponse, logn_residual[,col])
+  Logn_MAE <- MAE(logn_residual$observedResponse, logn_residual[,col])
+  data_RMSD_MAE <- rbind(data_RMSD_MAE,
+                         data.frame(Logn_RMSD,Logn_MAE))
+}
+
+data_RMSD_MAE <- data.frame(
+  RMSD = c(data_RMSD_MAE$Logn_RMSD),
+  MAE = c(data_RMSD_MAE$Logn_MAE),
+  model = c(rep("LogN",1000))
+)
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = RMSD), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+ggplot(data_RMSD_MAE)+
+  geom_boxplot(aes(x = model, y = MAE), 
+               outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)+
+  geom_hline(yintercept = mean(data$intensity), color = "green")
+
+```
+
+
+## Observed vs simulated
+```{r,echo=F}
+simulated <- rowMeans(logn_residual[,c(3,1002)])
+observed <- logn_residual$observedResponse
+
+ggscatter(data.frame(observed,simulated),x = "observed", y = "simulated",
+          add = "reg.line") +
+  stat_cor(label.x = 1, label.y = 7) +
+  stat_regline_equation(label.x = 1, label.y = 6.5)
+
+R_square <- c()
+for(col in 3:1002){
+  R_square <- c(R_square,cor(logn_residual$observedResponse,
+      logn_residual[,col],method = "pearson"))
+}
+
+test <- data.frame("R_value"=R_square, "Metric"="R-square")
+
+ggplot(test,aes(Metric,R_value))+
+  geom_boxplot()
+```
+
+## Variogram
+ Pour 2021
+```{r, echo=F,warning=F}
+annee <- 2021
+oneyeardata <- data %>% filter(year == annee)
+# Convert to spatial object
+coordinates(oneyeardata) <- ~X + Y
+
+# Compute experimental variogram
+variogram_exp <- variogram(intensity ~ 1, oneyeardata)
+#head(variogram_exp)
+
+#plot(variogram_exp, main = "Experimental Variogram")
+
+# Fit a variogram model
+variogram_model <- fit.variogram(variogram_exp,
+                        model = vgm("Sph",
+                          range = fit_tot[["sd_report"]][["value"]][["range"]],
+                          nugget = fit_tot[["sd_report"]][["value"]][["phi"]]
+                          ))
+
+# Plot the fitted model
+plot(variogram_exp, variogram_model, main = "Fitted Variogram Model (Spherical)")
+
+# kriging
+grid <- as.data.frame(grid_tot)[,seq(1,ncol(grid_tot)-1,1)] %>%
+  filter(year == annee)
+grid$time <- grid$year
+names(grid)[c(1,2)] <- c("X","Y")
+
+coordinates(grid) <- ~X + Y
+
+gridded(grid) <- TRUE
+
+# Perform Kriging
+kriging_result <- krige(intensity ~ 1, oneyeardata, grid, model = variogram_model)
+
+## [using ordinary kriging]
+
+# Visualize the results
+spplot(kriging_result["var1.pred"], main = "Kriging Interpolation")
+```
+ Pour 2022
+```{r, echo=F,warning=F}
+annee <- 2022
+oneyeardata <- data %>% filter(year == annee)
+# Convert to spatial object
+coordinates(oneyeardata) <- ~X + Y
+
+# Compute experimental variogram
+variogram_exp <- variogram(intensity ~ 1, oneyeardata)
+#head(variogram_exp)
+
+#plot(variogram_exp, main = "Experimental Variogram")
+
+# Fit a variogram model
+variogram_model <- fit.variogram(variogram_exp,
+                        model = vgm("Sph",
+                          range = fit_tot[["sd_report"]][["value"]][["range"]],
+                          nugget = fit_tot[["sd_report"]][["value"]][["phi"]]
+                          ))
+
+# Plot the fitted model
+plot(variogram_exp, variogram_model, main = "Fitted Variogram Model (Spherical)")
+
+# kriging
+grid <- as.data.frame(grid_tot)[,seq(1,ncol(grid_tot)-1,1)] %>%
+  filter(year == annee)
+grid$time <- grid$year
+names(grid)[c(1,2)] <- c("X","Y")
+
+coordinates(grid) <- ~X + Y
+
+gridded(grid) <- TRUE
+
+# Perform Kriging
+kriging_result <- krige(intensity ~ 1, oneyeardata, grid, model = variogram_model)
+
+## [using ordinary kriging]
+
+# Visualize the results
+spplot(kriging_result["var1.pred"], main = "Kriging Interpolation")
+```
+ Pour 2023
+```{r, echo=F,warning=F}
+annee <- 2023
+oneyeardata <- data %>% filter(year == annee)
+# Convert to spatial object
+coordinates(oneyeardata) <- ~X + Y
+
+# Compute experimental variogram
+variogram_exp <- variogram(intensity ~ 1, oneyeardata)
+#head(variogram_exp)
+
+#plot(variogram_exp, main = "Experimental Variogram")
+
+# Fit a variogram model
+variogram_model <- fit.variogram(variogram_exp,
+                        model = vgm("Sph",
+                          range = fit_tot[["sd_report"]][["value"]][["range"]],
+                          nugget = fit_tot[["sd_report"]][["value"]][["phi"]]
+                          ))
+
+# Plot the fitted model
+plot(variogram_exp, variogram_model, main = "Fitted Variogram Model (Spherical)")
+
+# kriging
+grid <- as.data.frame(grid_tot)[,seq(1,ncol(grid_tot)-1,1)] %>%
+  filter(year == annee)
+grid$time <- grid$year
+names(grid)[c(1,2)] <- c("X","Y")
+
+coordinates(grid) <- ~X + Y
+
+gridded(grid) <- TRUE
+
+# Perform Kriging
+kriging_result <- krige(intensity ~ 1, oneyeardata, grid, model = variogram_model)
+
+## [using ordinary kriging]
+
+# Visualize the results
+spplot(kriging_result["var1.pred"], main = "Kriging Interpolation")
+```
+ Pour 2025
+```{r, echo=F,warning=F}
+annee <- 2025
+oneyeardata <- data %>% filter(year == annee)
+# Convert to spatial object
+coordinates(oneyeardata) <- ~X + Y
+
+# Compute experimental variogram
+variogram_exp <- variogram(intensity ~ 1, oneyeardata)
+#head(variogram_exp)
+
+#plot(variogram_exp, main = "Experimental Variogram")
+
+# Fit a variogram model
+variogram_model <- fit.variogram(variogram_exp,
+                        model = vgm("Sph",
+                          range = fit_tot[["sd_report"]][["value"]][["range"]],
+                          nugget = fit_tot[["sd_report"]][["value"]][["phi"]]
+                          ))
+
+# Plot the fitted model
+plot(variogram_exp, variogram_model, main = "Fitted Variogram Model (Spherical)")
+
+# kriging
+grid <- as.data.frame(grid_tot)[,seq(1,ncol(grid_tot)-1,1)] %>%
+  filter(year == annee)
+grid$time <- grid$year
+names(grid)[c(1,2)] <- c("X","Y")
+
+coordinates(grid) <- ~X + Y
+
+gridded(grid) <- TRUE
+
+# Perform Kriging
+kriging_result <- krige(intensity ~ 1, oneyeardata, grid, model = variogram_model)
+
+## [using ordinary kriging]
+
+# Visualize the results
+spplot(kriging_result["var1.pred"], main = "Kriging Interpolation")
+```
+
+# Prediction
+```{r,echo=F}
+grid <- as.data.frame(grid_tot)[,seq(1,ncol(grid_tot)-1,1)] %>%
+  filter(year != 2024)
+grid$time <- grid$year
+names(grid)[c(1,2)] <- c("X","Y")
+predictions <- predict(fit_tot, newdata = grid,
+                       return_tmb_object = TRUE)
+
+#Let’s make a small function to make maps
+plot_map <- function(dat, column) {
+  ggplot(dat, aes(X, Y, fill = {{ column }})) +
+    geom_raster() +
+    facet_wrap(~year, nrow = 1) +
+    coord_fixed()+
+    theme(aspect.ratio = 3)
+}
+```
+
+There are four kinds of predictions that we get out of the model. First we will show the predictions that incorporate all fixed effects and random effects:
+
+```{r}
+plot_map(predictions$data, exp(est)) +
+  scale_fill_viridis_c(trans = "sqrt") +
+  ggtitle("Prediction (fixed effects + all random effects)")
+
+# plot the density as sequential data
+cut_min <- trunc(exp(predictions$data$est))
+cut_max <- cut_min+1
+cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
+
+for (i in 1:length(cuts)){
+  if (cuts[i]=="(8-9]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(9-10]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(10-11]"){
+    cuts[i] <- ">8"
+  }
+}
+
+predictions$data$cuts <- as.factor(cuts)
+
+ggplot(predictions$data, aes(X, Y, fill = cuts)) +
+    geom_raster() +
+    scale_fill_brewer("Density", type = "seq", palette = "YlOrRd")+
+    facet_wrap(~year, nrow = 1) +
+    coord_fixed()+
+    theme(aspect.ratio = 3)+
+    ggtitle("Prediction (fixed effects + all random effects)")
+```
+We can also look at just the fixed effects, here year:
+
+```{r}
+plot_map(predictions$data, exp(est_non_rf)) +
+  ggtitle("Prediction (fixed effects only)") +
+  scale_fill_viridis_c(trans = "sqrt")
+```
+
+We can look at the spatial random effects that represent consistent deviations in space through time that are not accounted for by our fixed effects. In other words, these deviations represent consistent biotic and abiotic factors that are affecting biomass density but are not accounted for in the model.
+
+```{r}
+plot_map(predictions$data, omega_s) +
+  ggtitle("Spatial random effects only") +
+  scale_fill_gradient2()
+```
+
+And finally we can look at the spatiotemporal random effects that represent deviation from the fixed effect predictions and the spatial random effect deviations. These represent biotic and abiotic factors that are changing through time and are not accounted for in the model.
+
+```{r}
+plot_map(predictions$data, epsilon_st) +
+  ggtitle("Spatiotemporal random effects only") +
+  scale_fill_gradient2()
+```
+
+## Total abundance calculation
+
+When we ran our predict.sdmTBM() function, it also returned a report from TMB in the output because we included return_tmb_object = TRUE. We can then run our get_index() function to extract the total abundance calculations and standard errors.
+
+We will need to set the area argument to 0.25 km2 since our grid cells are 0.5 km x 0.5 km. If some grid cells were not fully in the survey domain (or were on land), we could feed a vector of grid areas to the area argument that matched the number of grid cells.
+
+```{r, echo=FALSE}
+index <- get_index(predictions, area = 250000, bias_correct = TRUE)
+# be careful our prediction is in nb/m² so area have to be in m²
+
+ggplot(index, aes(time, est)) + geom_line() +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.4) +
+  xlab('Year') + ylab('Abundance estimate (nombre)')
+
+ggplot(index, aes(time, est*0.4/1000)) + geom_line() +
+  geom_ribbon(aes(ymin = lwr*0.4/1000, ymax = upr*0.4/1000), alpha = 0.4) +
+  xlab('Year') + ylab('Biomass calculate from abundance (tonne)')
+```
+
