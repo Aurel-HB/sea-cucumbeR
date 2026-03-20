@@ -1,0 +1,10 @@
+---
+title: "README"
+output: html_document
+---
+
+This part is dedicated to the modelisation of the biomass of *Cucumaria frondosa*
+by a spatial (spatiotemporal) model with explicit covariance matrix
+on the 2025 data (2021-2023,2025 data) using the TMB package and framework.
+The interest is to better understand the methodology use in the sdmTMB package
+and try to reproduce a simple model already test on the 2025 data.
