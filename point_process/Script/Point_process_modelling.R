@@ -34,7 +34,7 @@ HOLOTVSPM2025 <- readRDS(paste(here(),
 
 PPP <- list_PPP[[1]]
 PPP[["window"]][["units"]] <- list("metre","metres")
-PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
+#PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
 stn <- names(list_PPP)[1]
 
 
@@ -90,6 +90,7 @@ new_coord <- new_coord + matrix.start
 D1 <- density.ppp(PPP,bw.ppl(PPP))
 D2 <- density.ppp(PPP,bw.diggle(PPP))
 dX <- density(PPP, sigma=1, at="points")
+plot(D1);plot(D2);plot(dX)
 # Quadrat counting test of homogeneity
 tS <- quadrat.test(PPP)
 tS <- quadrat.test(PPP,1,5)
@@ -119,6 +120,19 @@ anova(fit0, fit1, test="LR")
 AIC(fit0);AIC(fit1)
 
 X <- simulate(fit1); plot(X[[1]])
+Show_result <- rbind(
+  as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
+                      rep("X",X$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
+
+# extract point process to use it on a another surface
 lambda <- function(x){return(
   fit1$coef[[1]]+fit1$coef[[2]]*x[1]+fit1$coef[[3]]*x[2]
 )}
@@ -136,16 +150,29 @@ formula(bigfit)
 goodfit <- step(bigfit, trace=0)
 formula(goodfit)
 AIC(goodfit)
+anova(fit1, goodfit, test="LR")
+
+X <- simulate(goodfit); plot(X[[1]])
+Show_result <- rbind(
+  as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
+                      rep("X",X$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
+
 # simulation of the process on another surface
 # 1) extract the intensity function
 lambda <- function(x){return(
   goodfit$coef[[1]]+
-    goodfit$coef[[2]]*x[1]+
-    goodfit$coef[[3]]*x[2]+
-    goodfit$coef[[4]]*x[1]^2+
-    goodfit$coef[[5]]*x[2]^2+
-    goodfit$coef[[6]]*x[1]^3+
-    goodfit$coef[[7]]*x[2]^3
+    goodfit$coef[[2]]*x[2]+
+    goodfit$coef[[3]]*x[2]^2+
+    goodfit$coef[[4]]*x[1]^3+
+    goodfit$coef[[5]]*x[2]^3
 )}
 #2) create a grid of the intensity function on the surface of simulation
 xseq <- seq(0, 1.5, length.out = 50)
@@ -160,12 +187,10 @@ ggplot(data = data_position %>% filter(station==stn))+
 #3) create the new point process pattern
 fnintensity <- function(x, y){return(
   exp(goodfit$coef[[1]]+
-    goodfit$coef[[2]]*x+
-    goodfit$coef[[3]]*y+
-    goodfit$coef[[4]]*x^2+
-    goodfit$coef[[5]]*y^2+
-    goodfit$coef[[6]]*x^3+
-    goodfit$coef[[7]]*y^3)
+    goodfit$coef[[2]]*y+
+    goodfit$coef[[3]]*y^2+
+    goodfit$coef[[4]]*x^3+
+    goodfit$coef[[5]]*y^3)
 )}
 pinhom <- rpoispp(lambda = fnintensity,
                   win = owin(xrange = c(0, 1.5), yrange = c(60,660)))
@@ -181,6 +206,19 @@ fitox1 <- kppm(PPP~x + y, clusters = "LGCP", method="clik2", model="matern",nu=0
 AIC(fitox0);AIC(fitox1)
 #simulation
 X <- simulate(fitox0); plot(X[[1]])
+Show_result <- rbind(
+  as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
+                      rep("X",X$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
+
+# extract point process to use it on a another surface
 plgcp <- rLGCP("matern", fitox0$lambda, var = fitox0$clustpar[1],
                scale = fitox0$clustpar[2], nu=fitox0$covmodel$margs$nu,
                win = owin(xrange = c(0, 150), yrange = c(60,660)))
