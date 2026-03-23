@@ -124,13 +124,17 @@ Show_result <- rbind(
   as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
                       rep("X",X$`Simulation 1`$n))),
   as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
 
 ggplot(data = Show_result)+
   geom_point(aes(x=V1,y=V2,color=V3))+
   facet_wrap(~V3,nrow=1)+
   ylab("")+xlab("")+
-  theme(axis.ticks = element_blank(),
-        axis.text = element_blank())
+  #ylim(PPP$window$yrange)+
+  #theme(axis.ticks = element_blank(),
+  #      axis.text = element_blank())
+  theme()
 
 # extract point process to use it on a another surface
 lambda <- function(x){return(
@@ -157,6 +161,8 @@ Show_result <- rbind(
   as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
                       rep("X",X$`Simulation 1`$n))),
   as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
 
 ggplot(data = Show_result)+
   geom_point(aes(x=V1,y=V2,color=V3))+
@@ -202,7 +208,9 @@ plot(x = pinhom$x,y = pinhom$y)
 
 # Cox model
 fitox0 <- kppm(PPP~1, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
-fitox1 <- kppm(PPP~x + y, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
+formule <- formula(goodfit)
+fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
+fitox1 <- kppm(PPP~y, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 AIC(fitox0);AIC(fitox1)
 #simulation
 X <- simulate(fitox0); plot(X[[1]])
@@ -210,6 +218,8 @@ Show_result <- rbind(
   as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
                       rep("X",X$`Simulation 1`$n))),
   as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
 
 ggplot(data = Show_result)+
   geom_point(aes(x=V1,y=V2,color=V3))+
@@ -249,3 +259,11 @@ plgcp <- rLGCP("gauss", fitox2$lambda, var = fitox2$clustpar[1],
                scale = fitox2$clustpar[2],
                win = owin(xrange = c(0, 1.50), yrange = c(160,260)))
 plot(attr(plgcp, "Lambda"))
+
+
+### Locally_weighted Poisson point process model ####
+# 1) find an estimate of lambda Poisson
+fit <- ppm(PPP ~ polynom(x,y,3))
+fit <- step(fit, trace=0)
+# 2) find an estimate of the interaction term
+
