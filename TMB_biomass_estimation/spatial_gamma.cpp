@@ -54,7 +54,7 @@ template<class Type>
     if( !isNA(c_i(i)) ) {
       Type ln_mu_i = beta0 + omega_i(i);
       Type mu_i = exp(ln_mu_i);
-      Type beta = alpha / mu_i;
+      Type beta = mu_i / alpha;
       jnll_comp(0) -= dgamma(c_i(i), alpha, beta, true);
     }
   }
