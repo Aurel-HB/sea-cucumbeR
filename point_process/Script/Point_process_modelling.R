@@ -32,7 +32,7 @@ HOLOTVSPM2025 <- readRDS(paste(here(),
 # Start with one PPP
 ########################
 
-PPP <- list_PPP[[1]]
+PPP <- list_PPP[[1]] # PPP<-list_PPP[["179"]]
 PPP[["window"]][["units"]] <- list("metre","metres")
 #PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
 stn <- names(list_PPP)[1]
@@ -262,8 +262,62 @@ plot(attr(plgcp, "Lambda"))
 
 
 ### Locally_weighted Poisson point process model ####
+pp <- PPP
 # 1) find an estimate of lambda Poisson
-fit <- ppm(PPP ~ polynom(x,y,3))
+fit <- ppm(pp ~ polynom(x,y,3))
 fit <- step(fit, trace=0)
-# 2) find an estimate of the interaction term
+# 2) calculate the local version of the K-function
+localKfunction <- localK(pp, verbose = TRUE)
+# 3) find an estimate of the interaction term
+theo <- localKfunction$theo
+nX <- npoints(pp)
+r <- localKfunction$r
+dr <- c(diff(r), diff(r)[nX - 1])
+l1 <- vector(l = nX)
+for(i in 1:nX){
+  progressreport(i,nX)
+  l1[i] <- exp(sum((sign(localKfunction[[i]] - theo) * (
+    (localKfunction[[i]] - theo) ^ 2)) / theo * dr, 
+                   na.rm = TRUE))
+}
+pp1 <- pp
+pp1$marks <- l1
+# 4) smooth the surface with the Nadaraya-Watson smoother
+im0_kernel <- Smooth(pp1, sigma = bw.CvL(pp1))
+im0_kernel <- Smooth(pp1, sigma = bw.CvL(pp1), positive = TRUE)
+im0_kernel <- Smooth(pp1, sigma = bw.diggle(pp1), positive = TRUE)
+#bw.CvL=Cronie and van Lieshout's 
+#Criterion for Bandwidth Selection for Kernel Density
 
+#Log-transform the kernel (if all values are positive)
+im0_kernel_log <- log(im0_kernel + 1e-6)
+# Standardizing to avoid extreme values 
+im0_kernel_log_scaled <- im0_kernel_log
+im0_kernel_log_scaled[["v"]] <- scale(im0_kernel_log[["v"]])
+summary(im0_kernel_log_scaled)
+
+# 5) Fit the final model, maintaining the same covariate dependence specification
+formula <- as.formula(paste("pp",as.character(fit$trend)[1],
+                            as.character(fit$trend)[2],
+                            " + offset(im0_kernel_log_scaled)",sep="")) 
+lwppp <- ppm(formula)
+lwppp <- ppm(pp~y+offset(im0_kernel_log_scaled))
+AIC(lwppp)
+
+X_inhom <- simulate(fit)
+X_lwppp <- simulate(lwppp)
+Show_result <- rbind(
+  as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
+                      rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
+  as.data.frame(cbind(X_inhom$`Simulation 1`$x,X_inhom$`Simulation 1`$y,
+                      rep("X_inhom",X_inhom$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
