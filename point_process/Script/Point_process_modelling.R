@@ -28,15 +28,24 @@ HOLOTVSPM2025 <- readRDS(paste(here(),
               "/comparing_biomass_method/Data/03_HOLOTVSPM2025_summary.rds",
               sep=""))
 
+data_position_substrat <- readRDS(paste(here(),
+              "/via3_data_exploration/Data/substrat/data_position_substrat.rds",
+              sep=""))
+
+data_substrate <- readRDS(paste(here(),
+              "/via3_data_exploration/Data/substrat/data_substrat_2025.rds",
+              sep=""))
+
 ########################
 # Start with one PPP
 ########################
 
-PPP <- list_PPP[[1]] # PPP<-list_PPP[["179"]]
+PPP <- list_PPP[[1]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
+# PPP<-list_PPP[["143"]]
 PPP[["window"]][["units"]] <- list("metre","metres")
 #PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
 stn <- names(list_PPP)[1]
-
+# stn=149 stn=179 stn=143
 
 ##############
 # math recall
@@ -105,7 +114,7 @@ VMR
 
 
 # inference statistic test ####
-#Poisson model
+#Poisson model ####
 fit0 <- ppm(PPP~1)
 fit1 <- ppm(PPP~x + y)
 #Likelihood Ratio Test
@@ -137,16 +146,16 @@ ggplot(data = Show_result)+
   theme()
 
 # extract point process to use it on a another surface
-lambda <- function(x){return(
-  fit1$coef[[1]]+fit1$coef[[2]]*x[1]+fit1$coef[[3]]*x[2]
-)}
-xseq <- seq(0, 1.5, length.out = 50)
-yseq <- seq(60, 660, length.out = 6000)
-grid <- expand.grid(xseq, yseq)
-z <- apply(grid, 1, lambda)
-zmat <- matrix(z, 50, 6000)
-#library(fields)
-image.plot(xseq, yseq, zmat, xlab = "x", ylab = "y",main = "lambda(x)")
+#lambda <- function(x){return(
+#  fit1$coef[[1]]+fit1$coef[[2]]*x[1]+fit1$coef[[3]]*x[2]
+#)}
+#xseq <- seq(0, 1.5, length.out = 50)
+#yseq <- seq(60, 660, length.out = 6000)
+#grid <- expand.grid(xseq, yseq)
+#z <- apply(grid, 1, lambda)
+#zmat <- matrix(z, 50, 6000)
+##library(fields)
+#image.plot(xseq, yseq, zmat, xlab = "x", ylab = "y",main = "lambda(x)")
 
 #select best model for intensity function
 bigfit <- ppm(PPP ~ polynom(x,y,3))
@@ -171,42 +180,42 @@ ggplot(data = Show_result)+
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
 
-# simulation of the process on another surface
+# simulation of the process on another surface 
 # 1) extract the intensity function
-lambda <- function(x){return(
-  goodfit$coef[[1]]+
-    goodfit$coef[[2]]*x[2]+
-    goodfit$coef[[3]]*x[2]^2+
-    goodfit$coef[[4]]*x[1]^3+
-    goodfit$coef[[5]]*x[2]^3
-)}
+#lambda <- function(x){return(
+#  goodfit$coef[[1]]+
+#    goodfit$coef[[2]]*x[2]+
+#    goodfit$coef[[3]]*x[2]^2+
+#    goodfit$coef[[4]]*x[1]^3+
+#    goodfit$coef[[5]]*x[2]^3
+#)}
 #2) create a grid of the intensity function on the surface of simulation
-xseq <- seq(0, 1.5, length.out = 50)
-yseq <- seq(60, 660, length.out = 6000)
-grid <- expand.grid(xseq, yseq)
-z <- apply(grid, 1, lambda)
-zmat <- matrix(z, 50, 6000)
-image.plot(xseq, yseq, zmat, xlab = "x", ylab = "y",main = "log(lambda(x))")
-ggplot(data = data_position %>% filter(station==stn))+
-  geom_point(aes(x=X,y=Y))+
-  ylab("")
+#xseq <- seq(0, 1.5, length.out = 50)
+#yseq <- seq(60, 660, length.out = 6000)
+#grid <- expand.grid(xseq, yseq)
+#z <- apply(grid, 1, lambda)
+#zmat <- matrix(z, 50, 6000)
+#image.plot(xseq, yseq, zmat, xlab = "x", ylab = "y",main = "log(lambda(x))")
+#ggplot(data = data_position %>% filter(station==stn))+
+#  geom_point(aes(x=X,y=Y))+
+#  ylab("")
 #3) create the new point process pattern
-fnintensity <- function(x, y){return(
-  exp(goodfit$coef[[1]]+
-    goodfit$coef[[2]]*y+
-    goodfit$coef[[3]]*y^2+
-    goodfit$coef[[4]]*x^3+
-    goodfit$coef[[5]]*y^3)
-)}
-pinhom <- rpoispp(lambda = fnintensity,
-                  win = owin(xrange = c(0, 1.5), yrange = c(60,660)))
-plot(x = pinhom$x,y = pinhom$y)
+#fnintensity <- function(x, y){return(
+#  exp(goodfit$coef[[1]]+
+#    goodfit$coef[[2]]*y+
+#    goodfit$coef[[3]]*y^2+
+#    goodfit$coef[[4]]*x^3+
+#    goodfit$coef[[5]]*y^3)
+#)}
+#pinhom <- rpoispp(lambda = fnintensity,
+#                  win = owin(xrange = c(0, 1.5), yrange = c(60,660)))
+#plot(x = pinhom$x,y = pinhom$y)
 #plot(pinhom, main = "Inhomogeneous")
 
 
 
 
-# Cox model
+# Cox model ####
 fitox0 <- kppm(PPP~1, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 formule <- formula(goodfit)
 fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
@@ -321,3 +330,40 @@ ggplot(data = Show_result)+
   ylab("")+xlab("")+
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
+
+
+# point process with substrate as covariate ####
+ppp_sub <- PPP
+#ppp_sub$substrate <- data_position_substrat$substrate[grep(
+#  pattern = stn,data_position_substrat$station)]
+# (c) covariate values in data frame
+substrate_function<-function(x,y){
+  temporary <- data_substrate %>% filter(station==stn)
+  substrate <- c()
+  for (i in 1:length(y)){
+    n=1
+    if (y[i]>temporary$y_stop[n]){
+      n <- n+1
+    }
+    substrate <- c(substrate,temporary$substrat[n])
+  }
+  return(as.factor(substrate))
+}
+Q <- quadscheme(ppp_sub)
+xQ <- x.quad(Q)
+yQ <- y.quad(Q)
+Svalues <- substrate_function(xQ,yQ)
+# poisson model
+fit1 <- ppm(ppp_sub~ y)
+fit_sub0 <- ppm(ppp_sub~Sub, data = data.frame(Sub=Svalues))
+#anova( fit1,fit_sub0, test="LR")
+fit_sub1 <- ppm(ppp_sub~y+Sub, data = data.frame(Sub=Svalues))
+AIC(fit1);AIC(fit_sub0);AIC(fit_sub1)
+goodfit <- step(ppm(ppp_sub ~ polynom(x,y,3)), trace=0)
+formula(goodfit);AIC(goodfit)
+formula <- as.formula(paste("ppp_sub",as.character(goodfit$trend)[1],
+                            as.character(goodfit$trend)[2],
+                            " + Sub",sep=""))
+fit_sub2 <- ppm(formula, data = data.frame(Sub=Svalues))
+AIC(fit_sub2);AIC(goodfit)
+summary(fit_sub2)

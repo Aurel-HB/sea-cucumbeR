@@ -90,6 +90,29 @@ data_substrate <- readRDS(paste(
   "data_substrat_2025.rds",
   sep=""))
 
+###########################
+# convert time in distance
+###########################
+HOLOTVSPM2025 <- readRDS(paste(here(),
+                               "/comparing_biomass_method/Data/03_HOLOTVSPM2025_summary.rds",
+                               sep=""))
+data_substrate$y_start <- NA
+data_substrate$y_stop <- NA
+for (stn in unique(data_substrate$station)){
+  stn_info <- HOLOTVSPM2025 %>% filter(STN==as.character(stn))
+  substrat_station <- data_substrate %>% filter(station==stn)
+  for(segment in 1:nrow(substrat_station)){
+    substrat_station$y_start[segment] <- substrat_station$time_start[
+      segment]*stn_info$haul_distance[1]/stn_info$haul_duration[1]
+    substrat_station$y_stop[segment] <- substrat_station$time_stop[
+      segment]*stn_info$haul_distance[1]/stn_info$haul_duration[1]
+  }
+  data_substrate[grep(stn,data_substrate$station),] <- substrat_station
+  rm(stn_info,substrat_station)
+}
+
+
+
 #############################################################
 #associate the substrate with the sea cucumbers annotations
 #############################################################
