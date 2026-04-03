@@ -11,6 +11,7 @@ library(dplyr)
 library(ggplot2)
 library(ggspatial)
 library(fields)
+library(gridExtra)
 
 #############
 #load data
@@ -213,6 +214,68 @@ ggplot(data = Show_result)+
 #plot(pinhom, main = "Inhomogeneous")
 
 
+# Check the model ####
+#Envelope Tests (K-Function)
+fit_checked <- goodfit
+# Simulate 99 replicates from the fitted model
+n_sim <- 99
+simulated_patterns <- simulate(fit_checked,n_sim)
+# Compute K-functions for observed and simulated data
+K_obs <- Kest(PPP)
+K_sim <- Kest(simulated_patterns[[1]])
+for (i in 2:length(simulated_patterns)){
+  K_sim <- rbind(K_sim,Kest(simulated_patterns[[i]]))
+}
+# Plot envelope test
+plot(K_obs, main = "Envelope Test for Poisson Model")
+plot(K_sim, add = TRUE, col = "gray", lty = 2)
+plot(K_obs,add = TRUE, main = "Envelope Test for Poisson Model")
+legend("topleft", legend = c("Observed", "Simulated"), lty = c(1, 2),
+       col = c("black", "gray"))
+
+#QQ-Plots for Nearest Neighbor Distances
+# Compute distances to nearest neighbor for observed and simulated data
+nn_obs <- nndist(PPP)
+nn_sim <- matrix(unlist(lapply(1:n_sim, function(i) nndist(simulated_patterns[[i]]))), ncol = n_sim)
+# Flatten simulated distances and sort
+nn_sim_flat <- sort(as.vector(nn_sim))
+# Sort observed distances
+nn_obs_sorted <- sort(nn_obs)
+# QQ-Plot
+plot(qnorm(ppoints(length(nn_obs_sorted))), nn_obs_sorted,
+     main = "QQ-Plot: Observed vs. Theoretical Quantiles",
+     xlab = "Theoretical Quantiles (Normal)", ylab = "Observed Quantiles")
+abline(0, 1, col = "red")
+# Ensure lengths match by resampling the observed distances
+nn_obs_sorted <- sort(sample(nn_obs, length(nn_sim_flat), replace = TRUE))
+# QQ-Plot: Observed vs. Simulated (empirical quantiles)
+plot(nn_sim_flat, nn_obs_sorted,
+     main = "QQ-Plot: Observed vs. Simulated Nearest Neighbor Distances",
+     xlab = "Simulated Quantiles", ylab = "Observed Quantiles")
+abline(0, 1, col = "red")
+
+#Residual Analysis (Pearson Residuals)
+# Extract fitted intensity at data points
+fitted_intensity <- predict(fit_checked)
+# Residuals for unmarked patterns: log(fitted_intensity) - log(observed intensity)
+# Since observed intensity is 1 at each point, use:
+residuals <- log(fitted_intensity + 1e-10) - 0
+#plot residual
+plot(residuals, pch = ".", main = "Spatial Residuals")
+data_resid <- data.frame()
+for (i in 1:residuals$dim[1]){
+  data_resid <- as.data.frame(rbind(data_resid,
+                                    data.frame(
+                                    "x"=rep(residuals$xcol[i],residuals$dim[1]),
+                                    "y"=residuals$yrow,
+                                    "r"=as.data.frame(residuals[["v"]])[,i]
+                                    )))
+}
+ggplot(data = data_resid)+
+  geom_point(aes(x=x,y=y,color=r))+
+  scale_color_continuous(type = "viridis")+
+  ylab("")+xlab("")+labs(title = "Spatial Residuals")+
+  theme()
 
 
 # Cox model ####
@@ -222,7 +285,7 @@ fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu
 fitox1 <- kppm(PPP~y, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 AIC(fitox0);AIC(fitox1)
 #simulation
-X <- simulate(fitox0); plot(X[[1]])
+X_LGCP <- simulate(fitox0); plot(X[[1]])
 Show_result <- rbind(
   as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
                       rep("X",X$`Simulation 1`$n))),
@@ -310,7 +373,7 @@ formula <- as.formula(paste("pp",as.character(fit$trend)[1],
                             as.character(fit$trend)[2],
                             " + offset(im0_kernel_log_scaled)",sep="")) 
 lwppp <- ppm(formula)
-lwppp <- ppm(pp~y+offset(im0_kernel_log_scaled))
+#lwppp <- ppm(pp~y+offset(im0_kernel_log_scaled))
 AIC(lwppp)
 
 X_inhom <- simulate(fit)
@@ -365,5 +428,109 @@ formula <- as.formula(paste("ppp_sub",as.character(goodfit$trend)[1],
                             as.character(goodfit$trend)[2],
                             " + Sub",sep=""))
 fit_sub2 <- ppm(formula, data = data.frame(Sub=Svalues))
+formula <- as.formula(paste("ppp_sub",as.character(goodfit$trend)[1],
+                            as.character(goodfit$trend)[2],
+                            " + substrate_function",sep=""))
+fit_sub2 <-  ppm(formula)
 AIC(fit_sub2);AIC(goodfit)
 summary(fit_sub2)
+
+
+X_inhom <- simulate(goodfit)
+X_sub <- simulate(fit_sub2)
+Show_result <- rbind(
+  as.data.frame(cbind(X_sub$`Simulation 1`$x,X_sub$`Simulation 1`$y,
+                      rep("X_sub",X_sub$`Simulation 1`$n))),
+  as.data.frame(cbind(X_inhom$`Simulation 1`$x,X_inhom$`Simulation 1`$y,
+                      rep("X_inhom",X_inhom$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
+
+
+# Locally_weighted Poisson point process model
+pp <- PPP
+# 1) find an estimate of lambda Poisson
+fit <- fit_sub2
+# 2) calculate the local version of the K-function
+localKfunction <- localK(pp, verbose = TRUE)
+# 3) find an estimate of the interaction term
+theo <- localKfunction$theo
+nX <- npoints(pp)
+r <- localKfunction$r
+dr <- c(diff(r), diff(r)[nX - 1])
+l1 <- vector(l = nX)
+for(i in 1:nX){
+  progressreport(i,nX)
+  l1[i] <- exp(sum((sign(localKfunction[[i]] - theo) * (
+    (localKfunction[[i]] - theo) ^ 2)) / theo * dr, 
+    na.rm = TRUE))
+}
+pp1 <- pp
+pp1$marks <- l1
+# 4) smooth the surface with the Nadaraya-Watson smoother
+im0_kernel <- Smooth(pp1, sigma = bw.diggle(pp1), positive = TRUE)
+#bw.CvL=Cronie and van Lieshout's 
+#Criterion for Bandwidth Selection for Kernel Density
+
+#Log-transform the kernel (if all values are positive)
+im0_kernel_log <- log(im0_kernel + 1e-6)
+# Standardizing to avoid extreme values 
+im0_kernel_log_scaled <- im0_kernel_log
+im0_kernel_log_scaled[["v"]] <- scale(im0_kernel_log[["v"]])
+summary(im0_kernel_log_scaled)
+
+# 5) Fit the final model, maintaining the same covariate dependence specification
+formula <- as.formula(paste("pp",as.character(fit$trend)[1],
+                            as.character(fit$trend)[2],
+                            " + offset(im0_kernel_log_scaled)",sep="")) 
+lwppp <- ppm(formula)
+AIC(lwppp)
+
+X_inhom_sub <- simulate(fit)
+X_lwppp <- simulate(lwppp)
+Show_result <- rbind(
+  as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
+                      rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
+  as.data.frame(cbind(X_inhom_sub$`Simulation 1`$x,X_inhom_sub$`Simulation 1`$y,
+                      rep("X_inhom_sub",X_inhom_sub$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
+
+
+
+# Show tot #####
+Show_result <- rbind(
+as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
+                                  rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
+as.data.frame(cbind(X_inhom$`Simulation 1`$x,X_inhom$`Simulation 1`$y,
+                                  rep("X_inhom",X_inhom$`Simulation 1`$n))),
+as.data.frame(cbind(X_LGCP$`Simulation 1`$x,X_LGCP$`Simulation 1`$y,
+                                  rep("X_LGCP",X_LGCP$`Simulation 1`$n))),
+as.data.frame(cbind(X_sub$`Simulation 1`$x,X_sub$`Simulation 1`$y,
+                    rep("X_sub",X_sub$`Simulation 1`$n))),
+as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())

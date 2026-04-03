@@ -111,7 +111,10 @@ for (stn in unique(data_substrate$station)){
   rm(stn_info,substrat_station)
 }
 
-
+saveRDS(data_substrate,
+        paste(ici,
+              "data_substrat_2025.rds",
+              sep=""))
 
 #############################################################
 #associate the substrate with the sea cucumbers annotations
