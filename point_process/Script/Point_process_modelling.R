@@ -41,58 +41,11 @@ data_substrate <- readRDS(paste(here(),
 # Start with one PPP
 ########################
 
-PPP <- list_PPP[[1]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
+stn <- "96" # # stn="149" stn="179" stn="143"
+PPP <- list_PPP[[stn]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
 # PPP<-list_PPP[["143"]]
 PPP[["window"]][["units"]] <- list("metre","metres")
 #PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
-stn <- names(list_PPP)[1]
-# stn=149 stn=179 stn=143
-
-##############
-# math recall
-##############
-# Reflection matrix:
-#    Reflection(θ)=[cos2θ   sin2θ
-#                   sin2θ  −cos2θ]
-
-# Rotation matrix:
-#    Rotation(θ)=[cosθ  -sinθ
-#                 sinθ   cosθ]
-##############
-
-
-# spatialization of the PPP ####
-start_coord <- HOLOTVSPM2025[grep(96,HOLOTVSPM2025$STN),
-                             c("X.haul_start","Y.haul_start")]
-end_coord <- HOLOTVSPM2025[grep(96,HOLOTVSPM2025$STN),
-                           c("X.shoot_end","Y.shoot_end")]
-
-affine <-(end_coord$Y.shoot_end - start_coord$Y.haul_start)/
-  (end_coord$X.shoot_end - start_coord$X.haul_start)
-
-ordonnee <- mean(c(end_coord$Y.shoot_end - affine*end_coord$X.shoot_end,
-                   start_coord$Y.haul_start - affine*start_coord$X.haul_start))
-
-Cartesian_equation <- function(x,affine,ordonnee){
-  y <- affine*x+ordonnee
-  return(y)
-}
-
-# rotation of angle theta
-theta <- atan(start_coord$X.haul_start/start_coord$Y.haul_start)
-new_coord <- as.matrix(data.frame(X=PPP[["x"]],Y=PPP[["y"]]))
-new_coord <- spdep::Rotation(new_coord,-theta) #sens horaire donc signe négatif
-
-# translation at the start point of the haul
-matrix.start <- t(matrix(start_coord,2,316))
-matrix.start <- as.matrix(data.frame(
-  X=rep(start_coord$X.haul_start,dim(new_coord)[1]),
-  Y=rep(start_coord$Y.haul_start,dim(new_coord)[1])
-  ))
-new_coord <- new_coord + matrix.start
-
-
-
 
 
 # statistic summary ####
