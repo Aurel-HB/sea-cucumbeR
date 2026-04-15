@@ -37,6 +37,9 @@ data_substrate <- readRDS(paste(here(),
               "/via3_data_exploration/Data/substrat/data_substrat_2025.rds",
               sep=""))
 
+list_PPP_epsg4461 <- readRDS(paste(here(),
+                    "/point_process/Data/list_PPP_2025_epsg4461.rds",sep=""))
+
 ########################
 # Start with one PPP
 ########################
@@ -47,6 +50,7 @@ PPP <- list_PPP[[stn]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
 PPP[["window"]][["units"]] <- list("metre","metres")
 #PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
 
+# or PPP <- list_PPP_epsg4461[[stn]]
 
 # statistic summary ####
 # spatial inhomogeneity : kernel smoothed estimate of intensity 
@@ -233,15 +237,17 @@ ggplot(data = data_resid)+
 
 # Cox model ####
 fitox0 <- kppm(PPP~1, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
+fitox0 <- kppm(PPP~1, clusters = "LGCP", method="adapcl", model="matern",nu=0.3)
+fitox0 <- kppm(PPP~1, clusters = "LGCP", statistic="pcf", model="matern",nu=0.3)
 formule <- formula(goodfit)
 fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 fitox1 <- kppm(PPP~y, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 AIC(fitox0);AIC(fitox1)
 #simulation
-X_LGCP <- simulate(fitox0); plot(X[[1]])
+X_LGCP <- simulate(fitox0); plot(X_LGCP[[1]])
 Show_result <- rbind(
-  as.data.frame(cbind(X$`Simulation 1`$x,X$`Simulation 1`$y,
-                      rep("X",X$`Simulation 1`$n))),
+  as.data.frame(cbind(X_LGCP$`Simulation 1`$x,X_LGCP$`Simulation 1`$y,
+                      rep("X_LGCP",X_LGCP$`Simulation 1`$n))),
   as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
 Show_result$V1 <- as.numeric(Show_result$V1)
 Show_result$V2 <- as.numeric(Show_result$V2)
