@@ -187,3 +187,6 @@ print(CSR_PP_2025 %>% filter(STN %in% CSR_PP_2025$STN[CSR_PP_2025$DCLF>0.05]))
 CSR_PP_2025$STN[CSR_PP_2025$Quadrat>0.05]
 CSR_PP_2025$STN[CSR_PP_2025$Quadrat>0.05] %in% cluster2
 print(CSR_PP_2025 %>% filter(STN %in% CSR_PP_2025$STN[CSR_PP_2025$Quadrat>0.05]))
+
+ggplot()+
+  geom_point(aes(list_PPP[["222"]]$x, list_PPP[["222"]]$y))
