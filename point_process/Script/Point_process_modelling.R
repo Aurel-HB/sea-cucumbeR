@@ -12,6 +12,7 @@ library(ggplot2)
 library(ggspatial)
 library(fields)
 library(gridExtra)
+library(nleqslv)
 
 #############
 #load data
@@ -237,14 +238,16 @@ ggplot(data = data_resid)+
 
 # Cox model ####
 fitox0 <- kppm(PPP~1, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
-fitox0 <- kppm(PPP~1, clusters = "LGCP", method="adapcl", model="matern",nu=0.3)
+fitox0 <- kppm(PPP~1, clusters = "LGCP", method="waag", model="matern",nu=0.3)
+fitox0 <- kppm(PPP~1, clusters = "LGCP", method="mincon", model="matern",nu=0.3)
 fitox0 <- kppm(PPP~1, clusters = "LGCP", statistic="pcf", model="matern",nu=0.3)
 formule <- formula(goodfit)
 fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 fitox1 <- kppm(PPP~y, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
-AIC(fitox0);AIC(fitox1)
+fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="waag", model="matern",nu=0.3)
+
 #simulation
-X_LGCP <- simulate(fitox0); plot(X_LGCP[[1]])
+X_LGCP <- simulate(fitox1); plot(X_LGCP[[1]])
 Show_result <- rbind(
   as.data.frame(cbind(X_LGCP$`Simulation 1`$x,X_LGCP$`Simulation 1`$y,
                       rep("X_LGCP",X_LGCP$`Simulation 1`$n))),
@@ -314,7 +317,7 @@ for(i in 1:nX){
 pp1 <- pp
 pp1$marks <- l1
 # 4) smooth the surface with the Nadaraya-Watson smoother
-im0_kernel <- Smooth(pp1, sigma = bw.CvL(pp1))
+im0_kernel <- Smooth(pp1, sigma = bw.ppl(pp1), positive = TRUE)
 im0_kernel <- Smooth(pp1, sigma = bw.CvL(pp1), positive = TRUE)
 im0_kernel <- Smooth(pp1, sigma = bw.diggle(pp1), positive = TRUE)
 #bw.CvL=Cronie and van Lieshout's 
@@ -475,6 +478,26 @@ ggplot(data = Show_result)+
 
 # Show tot #####
 Show_result <- rbind(
+  as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
+                      rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
+  as.data.frame(cbind(X_inhom$`Simulation 1`$x,X_inhom$`Simulation 1`$y,
+                      rep("X_inhom",X_inhom$`Simulation 1`$n))),
+  as.data.frame(cbind(X_LGCP$`Simulation 1`$x,X_LGCP$`Simulation 1`$y,
+                      rep("X_LGCP",X_LGCP$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("Initial Point Pattern",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme()
+
+
+
+
+Show_result <- rbind(
 as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
                                   rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
 as.data.frame(cbind(X_inhom$`Simulation 1`$x,X_inhom$`Simulation 1`$y,
@@ -483,7 +506,7 @@ as.data.frame(cbind(X_LGCP$`Simulation 1`$x,X_LGCP$`Simulation 1`$y,
                                   rep("X_LGCP",X_LGCP$`Simulation 1`$n))),
 as.data.frame(cbind(X_sub$`Simulation 1`$x,X_sub$`Simulation 1`$y,
                     rep("X_sub",X_sub$`Simulation 1`$n))),
-as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))
+as.data.frame(cbind(PPP$x,PPP$y,rep("Initial Point Pattern",PPP$n))))
 Show_result$V1 <- as.numeric(Show_result$V1)
 Show_result$V2 <- as.numeric(Show_result$V2)
 
@@ -491,5 +514,4 @@ ggplot(data = Show_result)+
   geom_point(aes(x=V1,y=V2,color=V3))+
   facet_wrap(~V3,nrow=1)+
   ylab("")+xlab("")+
-  theme(axis.ticks = element_blank(),
-        axis.text = element_blank())
+  theme()
