@@ -173,7 +173,48 @@ ggplot(data = Show_result)+
 
 
 # Check the model ####
-#Envelope Tests (K-Function)
+#Q–Q plot of smoothed raw residuals Baddeley 2005 ####
+# 1. Fit model
+fit <- goodfit
+# 2. Smoothed residual field for observed data
+r_obs <- Smooth(residuals(fit, type="raw"), sigma=0.05)
+v_obs <- as.vector(r_obs$v)
+v_obs <- v_obs[!is.na(v_obs)]
+# Sort observed values
+v_obs <- sort(v_obs)
+# 3. Monte Carlo simulations
+nsim <- 39
+sim_patterns <- simulate(fit, nsim=nsim)
+# 4. For each simulation:
+sim_sorted <- matrix(NA, nrow=length(v_obs), ncol=nsim)
+for(i in 1:nsim){
+  # simulate pattern
+  Xsim <- sim_patterns[[i]]
+  # re-fit model (IMPORTANT step)
+  fit_sim <- ppm(Xsim,formula(fit))
+  # smoothed residual field
+  r_sim <- Smooth(residuals(fit_sim, type="raw"), sigma=0.05)
+  
+  v_sim <- as.vector(r_sim$v)
+  v_sim <- v_sim[!is.na(v_sim)]
+  # sort values (order statistics)
+  sim_sorted[,i] <- sort(v_sim)
+}
+# 5. Expected quantiles (mean of order statistics)
+q_mean <- rowMeans(sim_sorted)
+# Envelopes (pointwise)
+q_lo <- apply(sim_sorted, 1, quantile, 0.025)
+q_hi <- apply(sim_sorted, 1, quantile, 0.975)
+# 6. Plot Q–Q
+plot(q_mean, v_obs,
+     xlab="Mean quantile of simulations",
+     ylab="Data quantile",
+     main="Smoothed residuals: raw")
+abline(0,1)
+lines(q_mean, q_lo, lty=2, col="red")
+lines(q_mean, q_hi, lty=2, col="red")
+
+#Envelope Tests (K-Function) ####
 fit_checked <- goodfit
 # Simulate 99 replicates from the fitted model
 n_sim <- 99
@@ -188,63 +229,21 @@ for (i in 2:length(simulated_patterns)){
 plot(K_obs, main = "Envelope Test for Poisson Model")
 plot(K_sim, add = TRUE, col = "gray", lty = 2)
 plot(K_obs,add = TRUE, main = "Envelope Test for Poisson Model")
-legend("topleft", legend = c("Observed", "Simulated"), lty = c(1, 2),
+legend("top", legend = c("Observed", "Simulated"), lty = c(1, 2),
        col = c("black", "gray"))
 
-#QQ-Plots for Nearest Neighbor Distances
-# Compute distances to nearest neighbor for observed and simulated data
-nn_obs <- nndist(PPP)
-nn_sim <- matrix(unlist(lapply(1:n_sim, function(i) nndist(simulated_patterns[[i]]))), ncol = n_sim)
-# Flatten simulated distances and sort
-nn_sim_flat <- sort(as.vector(nn_sim))
-# Sort observed distances
-nn_obs_sorted <- sort(nn_obs)
-# QQ-Plot
-plot(qnorm(ppoints(length(nn_obs_sorted))), nn_obs_sorted,
-     main = "QQ-Plot: Observed vs. Theoretical Quantiles",
-     xlab = "Theoretical Quantiles (Normal)", ylab = "Observed Quantiles")
-abline(0, 1, col = "red")
-# Ensure lengths match by resampling the observed distances
-nn_obs_sorted <- sort(sample(nn_obs, length(nn_sim_flat), replace = TRUE))
-# QQ-Plot: Observed vs. Simulated (empirical quantiles)
-plot(nn_sim_flat, nn_obs_sorted,
-     main = "QQ-Plot: Observed vs. Simulated Nearest Neighbor Distances",
-     xlab = "Simulated Quantiles", ylab = "Observed Quantiles")
-abline(0, 1, col = "red")
 
-#Residual Analysis (Pearson Residuals)
-# Extract fitted intensity at data points
-fitted_intensity <- predict(fit_checked)
-# Residuals for unmarked patterns: log(fitted_intensity) - log(observed intensity)
-# Since observed intensity is 1 at each point, use:
-residuals <- log(fitted_intensity + 1e-10) - 0
-#plot residual
-plot(residuals, pch = ".", main = "Spatial Residuals")
-data_resid <- data.frame()
-for (i in 1:residuals$dim[1]){
-  data_resid <- as.data.frame(rbind(data_resid,
-                                    data.frame(
-                                    "x"=rep(residuals$xcol[i],residuals$dim[1]),
-                                    "y"=residuals$yrow,
-                                    "r"=as.data.frame(residuals[["v"]])[,i]
-                                    )))
-}
-ggplot(data = data_resid)+
-  geom_point(aes(x=x,y=y,color=r))+
-  scale_color_continuous(type = "viridis")+
-  ylab("")+xlab("")+labs(title = "Spatial Residuals")+
-  theme()
 
 
 # Cox model ####
-fitox0 <- kppm(PPP~1, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
-fitox0 <- kppm(PPP~1, clusters = "LGCP", method="waag", model="matern",nu=0.3)
-fitox0 <- kppm(PPP~1, clusters = "LGCP", method="mincon", model="matern",nu=0.3)
-fitox0 <- kppm(PPP~1, clusters = "LGCP", statistic="pcf", model="matern",nu=0.3)
+#fitox0 <- kppm(PPP~1, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
+#fitox0 <- kppm(PPP~1, clusters = "LGCP", method="waag", model="matern",nu=0.3)
+#fitox0 <- kppm(PPP~1, clusters = "LGCP", method="mincon", model="matern",nu=0.3)
+#fitox0 <- kppm(PPP~1, clusters = "LGCP", statistic="pcf", model="matern",nu=0.3)
 formule <- formula(goodfit)
-fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
+#fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 fitox1 <- kppm(PPP~y, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
-fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="waag", model="matern",nu=0.3)
+#fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="waag", model="matern",nu=0.3)
 
 #simulation
 X_LGCP <- simulate(fitox1); plot(X_LGCP[[1]])
@@ -262,7 +261,49 @@ ggplot(data = Show_result)+
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
 
-# extract point process to use it on a another surface
+#Q–Q plot of smoothed raw residuals Baddeley 2005 ####
+# 1. Fit model
+fit <- fitox1
+# 2. Smoothed residual field for observed data
+r_obs <- Smooth(residuals(fit, type="raw"), sigma=0.05)
+v_obs <- as.vector(r_obs$v)
+v_obs <- v_obs[!is.na(v_obs)]
+# Sort observed values
+v_obs <- sort(v_obs)
+# 3. Monte Carlo simulations
+nsim <- 39
+sim_patterns <- simulate(fit, nsim=nsim)
+# 4. For each simulation:
+sim_sorted <- matrix(NA, nrow=length(v_obs), ncol=nsim)
+for(i in 1:nsim){
+  # simulate pattern
+  Xsim <- sim_patterns[[i]]
+  # re-fit model (IMPORTANT step)
+  fit_sim <- kppm(Xsim~y, clusters = "LGCP", method="clik2",
+                  model="matern",nu=0.3)
+  # smoothed residual field
+  r_sim <- Smooth(residuals(fit_sim, type="raw"), sigma=0.05)
+  
+  v_sim <- as.vector(r_sim$v)
+  v_sim <- v_sim[!is.na(v_sim)]
+  # sort values (order statistics)
+  sim_sorted[,i] <- sort(v_sim)
+}
+# 5. Expected quantiles (mean of order statistics)
+q_mean <- rowMeans(sim_sorted)
+# Envelopes (pointwise)
+q_lo <- apply(sim_sorted, 1, quantile, 0.025)
+q_hi <- apply(sim_sorted, 1, quantile, 0.975)
+# 6. Plot Q–Q
+plot(q_mean, v_obs,
+     xlab="Mean quantile of simulations",
+     ylab="Data quantile",
+     main="Smoothed residuals: raw")
+abline(0,1)
+lines(q_mean, q_lo, lty=2, col="red")
+lines(q_mean, q_hi, lty=2, col="red")
+
+# extract point process to use it on a another surface ####
 plgcp <- rLGCP("matern", fitox0$lambda, var = fitox0$clustpar[1],
                scale = fitox0$clustpar[2], nu=fitox0$covmodel$margs$nu,
                win = owin(xrange = c(0, 150), yrange = c(60,660)))
@@ -293,7 +334,7 @@ plgcp <- rLGCP("gauss", fitox2$lambda, var = fitox2$clustpar[1],
                scale = fitox2$clustpar[2],
                win = owin(xrange = c(0, 1.50), yrange = c(160,260)))
 plot(attr(plgcp, "Lambda"))
-
+#####
 
 ### Locally_weighted Poisson point process model ####
 pp <- PPP
@@ -356,6 +397,71 @@ ggplot(data = Show_result)+
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
 
+#Q–Q plot of smoothed raw residuals Baddeley 2005 ####
+# 1. Fit model
+fit <- lwppp
+# 2. Smoothed residual field for observed data
+r_obs <- Smooth(residuals(fit, type="raw"), sigma=0.05)
+v_obs <- as.vector(r_obs$v)
+v_obs <- v_obs[!is.na(v_obs)]
+# Sort observed values
+v_obs <- sort(v_obs)
+# 3. Monte Carlo simulations
+nsim <- 39
+sim_patterns <- simulate(fit, nsim=nsim)
+# 4. For each simulation:
+sim_sorted <- matrix(NA, nrow=length(v_obs), ncol=nsim)
+for(i in 1:nsim){
+  # simulate pattern
+  Xsim <- sim_patterns[[i]]
+  # re-fit model (IMPORTANT step)
+  formula <- as.formula(paste("Xsim",as.character(fit$trend)[1],
+                              as.character(fit$trend)[2],
+                              " + offset(im0_kernel_log_scaled)",sep="")) 
+  fit_sim <- ppm(formula)
+  # smoothed residual field
+  r_sim <- Smooth(residuals(fit_sim, type="raw"), sigma=0.05)
+  
+  v_sim <- as.vector(r_sim$v)
+  v_sim <- v_sim[!is.na(v_sim)]
+  # sort values (order statistics)
+  sim_sorted[,i] <- sort(v_sim)
+}
+# 5. Expected quantiles (mean of order statistics)
+q_mean <- rowMeans(sim_sorted)
+# Envelopes (pointwise)
+q_lo <- apply(sim_sorted, 1, quantile, 0.025)
+q_hi <- apply(sim_sorted, 1, quantile, 0.975)
+# 6. Plot Q–Q
+plot(q_mean, v_obs,
+     xlab="Mean quantile of simulations",
+     ylab="Data quantile",
+     main="Smoothed residuals: raw")
+abline(0,1)
+lines(q_mean, q_lo, lty=2, col="red")
+lines(q_mean, q_hi, lty=2, col="red")
+
+
+# Show tot #####
+Show_result <- rbind(
+  as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
+                      rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
+  as.data.frame(cbind(X_inhom$`Simulation 1`$x,X_inhom$`Simulation 1`$y,
+                      rep("X_inhom",X_inhom$`Simulation 1`$n))),
+  as.data.frame(cbind(X_LGCP$`Simulation 1`$x,X_LGCP$`Simulation 1`$y,
+                      rep("X_LGCP",X_LGCP$`Simulation 1`$n))),
+  as.data.frame(cbind(PPP$x,PPP$y,rep("Initial Point Pattern",PPP$n))))
+Show_result$V1 <- as.numeric(Show_result$V1)
+Show_result$V2 <- as.numeric(Show_result$V2)
+
+ggplot(data = Show_result)+
+  geom_point(aes(x=V1,y=V2,color=V3))+
+  facet_wrap(~V3,nrow=1)+
+  ylab("")+xlab("")+
+  theme()
+
+
+#####
 
 # point process with substrate as covariate ####
 ppp_sub <- PPP
@@ -477,26 +583,6 @@ ggplot(data = Show_result)+
 
 
 # Show tot #####
-Show_result <- rbind(
-  as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
-                      rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
-  as.data.frame(cbind(X_inhom$`Simulation 1`$x,X_inhom$`Simulation 1`$y,
-                      rep("X_inhom",X_inhom$`Simulation 1`$n))),
-  as.data.frame(cbind(X_LGCP$`Simulation 1`$x,X_LGCP$`Simulation 1`$y,
-                      rep("X_LGCP",X_LGCP$`Simulation 1`$n))),
-  as.data.frame(cbind(PPP$x,PPP$y,rep("Initial Point Pattern",PPP$n))))
-Show_result$V1 <- as.numeric(Show_result$V1)
-Show_result$V2 <- as.numeric(Show_result$V2)
-
-ggplot(data = Show_result)+
-  geom_point(aes(x=V1,y=V2,color=V3))+
-  facet_wrap(~V3,nrow=1)+
-  ylab("")+xlab("")+
-  theme()
-
-
-
-
 Show_result <- rbind(
 as.data.frame(cbind(X_lwppp$`Simulation 1`$x,X_lwppp$`Simulation 1`$y,
                                   rep("X_lwppp",X_lwppp$`Simulation 1`$n))),
