@@ -39,6 +39,8 @@ data_substrate <- readRDS(paste(here(),
 list_PPP_epsg4461 <- readRDS(paste(here(),
                      "/point_process/Data/list_PPP_2025_epsg4461.rds",sep=""))
 
+data_position_epsg4461 <- readRDS(paste(here(),
+                    "/point_process/Data/data_position_2025_epsg4461",sep=""))
 
 ########################################
 # test of Complete Spatial Randomness
@@ -190,3 +192,13 @@ print(CSR_PP_2025 %>% filter(STN %in% CSR_PP_2025$STN[CSR_PP_2025$Quadrat>0.05])
 
 ggplot()+
   geom_point(aes(list_PPP[["222"]]$x, list_PPP[["222"]]$y))
+
+
+
+########################################
+# Show point patterns
+########################################
+
+ggplot(data=data_position_epsg4461)+
+  geom_point(aes(x=X,y=Y))+
+  theme(aspect.ratio = 3)
