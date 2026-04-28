@@ -441,6 +441,16 @@ abline(0,1)
 lines(q_mean, q_lo, lty=2, col="red")
 lines(q_mean, q_hi, lty=2, col="red")
 
+# Validation by scoring rules ####
+
+
+
+
+
+
+
+
+
 
 # Show tot #####
 Show_result <- rbind(
