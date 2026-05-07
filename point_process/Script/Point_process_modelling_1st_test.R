@@ -42,7 +42,7 @@ list_PPP_epsg4461 <- readRDS(paste(here(),
                     "/point_process/Data/list_PPP_2025_epsg4461.rds",sep=""))
 
 data_position_epsg4461<- readRDS(
-        paste(here(),"/point_process/Data/data_position_2025_epsg4461",sep=""))
+        paste(here(),"/point_process/Data/data_position_2025_epsg4461.rds",sep=""))
 
 ### ### ### ### ### ### ###
 # Start with one PPP ####
@@ -464,7 +464,7 @@ lines(q_mean, q_hi, lty=2, col="red")
 ### ### ### ###
 # Validation by scoring rules ####
 ### ### ### ###
-
+source(paste(here(),"/point_process/script/",sep="")))
 
 
 
