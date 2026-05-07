@@ -1,8 +1,8 @@
 # This code test an approach of modelling on point process to characterize it
 
-#############
-#load packages
-#############
+### ### ### ###
+#load packages ####
+### ### ### ###
 library(here)
 library(sf)
 library(spatstat)
@@ -14,9 +14,9 @@ library(fields)
 library(gridExtra)
 library(nleqslv)
 
-#############
-#load data
-#############
+### ### ### ###
+#load data ####
+### ### ### ###
 
 list_PPP <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/list_PPP_tuyau_2025.rds",
@@ -41,9 +41,12 @@ data_substrate <- readRDS(paste(here(),
 list_PPP_epsg4461 <- readRDS(paste(here(),
                     "/point_process/Data/list_PPP_2025_epsg4461.rds",sep=""))
 
-########################
-# Start with one PPP
-########################
+data_position_epsg4461<- readRDS(
+        paste(here(),"/point_process/Data/data_position_2025_epsg4461",sep=""))
+
+### ### ### ### ### ### ###
+# Start with one PPP ####
+### ### ### ### ### ### ###
 
 stn <- "96" # # stn="149" stn="179" stn="143"
 PPP <- list_PPP[[stn]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
@@ -51,14 +54,28 @@ PPP <- list_PPP[[stn]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
 PPP[["window"]][["units"]] <- list("metre","metres")
 #PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
 
-# or PPP <- list_PPP_epsg4461[[stn]]
+PPP <- list_PPP_epsg4461[[stn]]
 
 # statistic summary ####
 # spatial inhomogeneity : kernel smoothed estimate of intensity 
 D1 <- density.ppp(PPP,bw.ppl(PPP))
 D2 <- density.ppp(PPP,bw.diggle(PPP))
+D3 <- density.ppp(PPP,bw.CvL(PPP))
+D4 <- density.ppp(PPP,bw.scott(PPP))
 dX <- density(PPP, sigma=1, at="points")
-plot(D1);plot(D2);plot(dX)
+plot(D1);plot(D2);plot(D3);plot(D4);plot(dX)
+
+data_test <- data.frame(
+  x = sort(rep(D4$xcol, 128)),
+  y = rep(D4$yrow, 128),
+  value = as.numeric(D4$v)
+  )
+ggplot(data_test)+
+  geom_point(aes(x = x, y = y, colour=value))+
+  scale_color_gradient(low = "#eeee44",
+                        #mid = "#bb1166",
+                        high = "blue")
+
 # Quadrat counting test of homogeneity
 tS <- quadrat.test(PPP)
 tS <- quadrat.test(PPP,1,5)
@@ -117,11 +134,13 @@ ggplot(data = Show_result)+
 #image.plot(xseq, yseq, zmat, xlab = "x", ylab = "y",main = "lambda(x)")
 
 #select best model for intensity function
-bigfit <- ppm(PPP ~ polynom(x,y,3))
+bigfit <- ppm(PPP ~ polynom(x,y,2))
+bigfit <- ppm(PPP ~ polynom(y,2))
 formula(bigfit)
 goodfit <- step(bigfit, trace=0)
 formula(goodfit)
-AIC(goodfit)
+AIC(goodfit) # -> there is problem with to complex intensity model that block
+# further analysis of the point process
 anova(fit1, goodfit, test="LR")
 
 X <- simulate(goodfit); plot(X[[1]])
@@ -173,7 +192,7 @@ ggplot(data = Show_result)+
 
 
 # Check the model ####
-#Q–Q plot of smoothed raw residuals Baddeley 2005 ####
+##Q–Q plot of smoothed raw residuals Baddeley 2005 ####
 # 1. Fit model
 fit <- goodfit
 # 2. Smoothed residual field for observed data
@@ -214,7 +233,7 @@ abline(0,1)
 lines(q_mean, q_lo, lty=2, col="red")
 lines(q_mean, q_hi, lty=2, col="red")
 
-#Envelope Tests (K-Function) ####
+##Envelope Tests (K-Function) ####
 fit_checked <- goodfit
 # Simulate 99 replicates from the fitted model
 n_sim <- 99
@@ -261,7 +280,7 @@ ggplot(data = Show_result)+
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
 
-#Q–Q plot of smoothed raw residuals Baddeley 2005 ####
+##Q–Q plot of smoothed raw residuals Baddeley 2005 ####
 # 1. Fit model
 fit <- fitox1
 # 2. Smoothed residual field for observed data
@@ -303,7 +322,7 @@ abline(0,1)
 lines(q_mean, q_lo, lty=2, col="red")
 lines(q_mean, q_hi, lty=2, col="red")
 
-# extract point process to use it on a another surface ####
+## extract point process to use it on a another surface ####
 plgcp <- rLGCP("matern", fitox0$lambda, var = fitox0$clustpar[1],
                scale = fitox0$clustpar[2], nu=fitox0$covmodel$margs$nu,
                win = owin(xrange = c(0, 150), yrange = c(60,660)))
@@ -334,13 +353,14 @@ plgcp <- rLGCP("gauss", fitox2$lambda, var = fitox2$clustpar[1],
                scale = fitox2$clustpar[2],
                win = owin(xrange = c(0, 1.50), yrange = c(160,260)))
 plot(attr(plgcp, "Lambda"))
-#####
+###-#####
 
-### Locally_weighted Poisson point process model ####
+# Locally_weighted Poisson point process model ####
 pp <- PPP
 # 1) find an estimate of lambda Poisson
-fit <- ppm(pp ~ polynom(x,y,3))
-fit <- step(fit, trace=0)
+#fit <- ppm(pp ~ polynom(x,y,3))
+#fit <- step(fit, trace=0)
+fit <- goodfit
 # 2) calculate the local version of the K-function
 localKfunction <- localK(pp, verbose = TRUE)
 # 3) find an estimate of the interaction term
@@ -441,8 +461,9 @@ abline(0,1)
 lines(q_mean, q_lo, lty=2, col="red")
 lines(q_mean, q_hi, lty=2, col="red")
 
+### ### ### ###
 # Validation by scoring rules ####
-
+### ### ### ###
 
 
 
