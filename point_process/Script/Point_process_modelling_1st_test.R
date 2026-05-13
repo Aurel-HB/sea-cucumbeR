@@ -88,6 +88,17 @@ VMR <- var(N) / mean(N)
 VMR
 #> VMR ≈ 1 → CSR; VMR ≫ 1 → strong clustering/inhomogeneity; VMR < 1 → regularity.
 
+check_warnings <- function(expr) {
+  warnings_list <- character(0)
+  result <- withCallingHandlers(
+    expr,
+    warning = function(w) {
+      warnings_list <<- c(warnings_list, as.character(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  list(result = result, warnings = warnings_list)
+}
 
 # inference statistic test ####
 #Poisson model ####
