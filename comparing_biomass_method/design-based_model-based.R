@@ -259,3 +259,7 @@ ggplot(compare_biomass,aes(x = date, y = biomass,colour = methods))+
   geom_errorbar(aes( ymin = lwr, ymax = upr), width = 0.2,show.legend = F)+
   labs(x = "", y = "Biomass (tonnes)", title = "Biomass from survey")+
   theme_bw()
+
+saveRDS(compare_biomass,paste(
+  here(),"/comparing_biomass_method/Data/compare_biomass_estimation.rds",sep=""
+))
