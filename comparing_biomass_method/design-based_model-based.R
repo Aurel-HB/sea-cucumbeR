@@ -211,12 +211,15 @@ ggplot(data_estimate, aes(X, Y, col = resids)) +
 
 ## extract the biomass estimation ####
 mod_result <- data.frame()
+map_predict <- data.frame()
 for (i in 1:4){
   fit <- list(fit_2021,fit_2022,fit_2023,fit_2025)[[i]]
   year <- c(2021,2022,2023,2025)[i]
-  p_sdm <- predict(fit, newdata = grid_proj, return_tmb_object = TRUE)
+  p_sdm <- predict(fit, newdata = grid_proj, return_tmb_object = TRUE,
+                   se_fit = TRUE)
   index <- get_index(p_sdm, area = 0.25, bias_correct = TRUE)
   mod_result <- rbind(mod_result,index)
+  map_predict <- rbind(map_predict, data.frame(date=year,p_sdm$data))
 }
 mod_result$`_sdmTMB_time`<-c(2021,2022,2023,2025)
 
@@ -263,3 +266,18 @@ ggplot(compare_biomass,aes(x = date, y = biomass,colour = methods))+
 saveRDS(compare_biomass,paste(
   here(),"/comparing_biomass_method/Data/compare_biomass_estimation.rds",sep=""
 ))
+
+
+ggplot(map_predict, aes(X, Y, fill = est)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  facet_wrap(~date,nrow=1)+
+  coord_fixed(expand = FALSE)+
+  theme(aspect.ratio = 3)
+
+ggplot(map_predict, aes(X, Y, fill = est_se)) +
+  geom_raster() +
+  scale_fill_gradient2() +
+  facet_wrap(~date,nrow=1)+
+  coord_fixed(expand = FALSE)+
+  theme(aspect.ratio = 3)
