@@ -11,6 +11,8 @@ library(ggspatial)
 library(boot)
 library(sdmTMB)
 library(INLA)
+library(RColorBrewer)
+library(XML)
 
 # load data ####
 calcul_area <- readRDS(paste(here(),
@@ -49,6 +51,71 @@ grid_proj <- as.data.frame(grid_proj)[,1:2]
 
 # extract the surface of the study area
 stock_surface <- as.numeric(st_area(calcul_area)/1e6)
+
+###-###-###-###-###-###-###-###-###
+# Show survey sampling design ####
+###-###-###-###-###-###-###-###-###
+#import the ZEE limitation
+zee <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""), layer = "eez")
+zee <- st_transform(zee, crs = 4467)
+zee <- zee$geometry
+#import the ZEE grid
+shp_grid <- st_read(dsn=paste(here(),"/SIG/SIG_Data", sep=""),
+                    layer = "grille_zee_spm")
+shp_grid <- st_transform(shp_grid, crs = 4467)
+shp_grid <- shp_grid %>% mutate(number = c(1:nrow(shp_grid)))
+
+shp_grid_study <- st_centroid(shp_grid) %>%
+  dplyr::filter(!is.na(x = Echantillo)) %>%
+  mutate(X = st_coordinates(.)[,1]) %>%
+  mutate(Y = st_coordinates(.)[,2]) 
+shp_grid_study <- 
+  st_join(calcul_area,shp_grid_study)
+shp_grid_study$geometry <- shp_grid$geometry[
+  shp_grid$number %in% shp_grid_study$number]
+
+source(paste(here(),"/via3_data_exploration/fct_WG84_WGSPM.R", sep=""))
+
+## import individual position
+data_position <- readRDS(
+  paste(here(),"/point_process/Data/data_position_2025_epsg4461.rds",sep=""))
+
+### get meters ###
+# Using a sample point in London
+df <- data.frame(lon = -56, lat = 45.8)
+df_sf <- st_as_sf(df, coords = c("lon", "lat"), crs = 4467)
+df_projected <- st_transform(df_sf, crs = 3857) # 3857 is Web Mercator (Meters)
+rm(df, df_sf)
+
+## creation of the map ####
+maps_tracks <- ggplot()+
+  geom_sf(data = shp_grid_study, color = "black",
+          fill = "#00000000")+
+  geom_sf(data = zee, color = "red", fill = NA, linewidth = 1,
+          linetype = "longdash", show.legend = FALSE)+
+  #geom_sf(data = df_sf, color = df_sf$color_date)+
+  geom_point(data=data_position, aes(X,Y), color="black")+
+  coord_sf(xlim = c(max(shp_grid_study$X)+1852*2,min(shp_grid_study$X)-1852*2),
+           ylim = c(max(shp_grid_study$Y)+1852*2,min(shp_grid_study$Y)-1852*2), 
+           expand = FALSE, crs = 4467)+
+  scale_x_continuous(breaks = seq(-56.40, -56.15, by = 0.125)) +
+  annotate("text", x = 544500, y = 5074897, colour = "red",
+           size = 4, label = "ZEE")+
+  annotate("text", x = 568000, y = 5021800, colour = "darkblue",
+           size = 2.2, label = "IFREMER")+
+  labs(x = "", y = "", colour = "", breaks = c("1", "3"))+#, caption = "IFREMER")+
+  theme(title = element_text(color = "black",face = "bold"),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill = "lightblue"),
+        plot.margin = margin(t = 10,  # Top margin
+                             r = 0,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0), # Left margin
+        )+
+  annotation_scale(location = "bl", line_width = .3) +
+  annotation_north_arrow(location = "tr", height = unit(0.5, "cm"),
+                         width = unit(0.5, "cm"))
+
 
 ###-###-###-###-###-###-###-###
 # Design-based estimation ####
