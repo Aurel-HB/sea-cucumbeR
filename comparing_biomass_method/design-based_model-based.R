@@ -93,7 +93,6 @@ maps_tracks <- ggplot()+
           fill = "#00000000")+
   geom_sf(data = zee, color = "red", fill = NA, linewidth = 1,
           linetype = "longdash", show.legend = FALSE)+
-  #geom_sf(data = df_sf, color = df_sf$color_date)+
   geom_point(data=data_position, aes(X,Y), color="black")+
   coord_sf(xlim = c(max(shp_grid_study$X)+1852*2,min(shp_grid_study$X)-1852*2),
            ylim = c(max(shp_grid_study$Y)+1852*2,min(shp_grid_study$Y)-1852*2), 
@@ -107,6 +106,8 @@ maps_tracks <- ggplot()+
   theme(title = element_text(color = "black",face = "bold"),
         panel.border = element_blank(),
         panel.background = element_rect(fill = "lightblue"),
+        panel.grid.major = element_line(colour = "lightblue"),
+        panel.grid.minor = element_line(colour = "lightblue"),
         plot.margin = margin(t = 10,  # Top margin
                              r = 0,  # Right margin
                              b = 0,  # Bottom margin
