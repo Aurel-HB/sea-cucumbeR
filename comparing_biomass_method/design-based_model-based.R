@@ -80,13 +80,6 @@ source(paste(here(),"/via3_data_exploration/fct_WG84_WGSPM.R", sep=""))
 data_position <- readRDS(
   paste(here(),"/point_process/Data/data_position_2025_epsg4461.rds",sep=""))
 
-### get meters ###
-# Using a sample point in London
-df <- data.frame(lon = -56, lat = 45.8)
-df_sf <- st_as_sf(df, coords = c("lon", "lat"), crs = 4467)
-df_projected <- st_transform(df_sf, crs = 3857) # 3857 is Web Mercator (Meters)
-rm(df, df_sf)
-
 ## creation of the map ####
 maps_tracks <- ggplot()+
   geom_sf(data = shp_grid_study, color = "black",
@@ -202,9 +195,9 @@ ggplot(data.frame(Biomass = as.numeric(bootobject_2025[["t"]])), aes(x = Biomass
 
 ## creation of the mesh with R-INLA ####
 #using the grid of the area
-bnd <- INLA::inla.nonconvex.hull(cbind(grid_proj$long, grid_proj$lat),
+bnd <- INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
                                  convex = -0.04)
-bnd2 = INLA::inla.nonconvex.hull(cbind(grid_proj$long, grid_proj$lat),
+bnd2 = INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
                                  convex = -0.15)
 
 mesh_inla <- INLA::inla.mesh.2d(
@@ -343,9 +336,37 @@ ggplot(map_predict, aes(X, Y, fill = est)) +
   coord_fixed(expand = FALSE)+
   theme(aspect.ratio = 3)
 
+#map error
 ggplot(map_predict, aes(X, Y, fill = est_se)) +
   geom_raster() +
   scale_fill_gradient2() +
   facet_wrap(~date,nrow=1)+
   coord_fixed(expand = FALSE)+
   theme(aspect.ratio = 3)
+
+# plot the density as sequential data
+cut_min <- trunc(map_predict$est)
+cut_max <- cut_min+1
+cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
+
+for (i in 1:length(cuts)){
+  if (cuts[i]=="(8-9]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(9-10]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(10-11]"){
+    cuts[i] <- ">8"
+  }
+}
+
+map_predict$cuts <- as.factor(cuts)
+
+ggplot(map_predict, aes(X, Y, fill = cuts)) +
+  geom_raster() +
+  scale_fill_brewer("Density", type = "seq", palette = "YlOrRd")+
+  facet_wrap(~date, nrow = 1) +
+  coord_fixed()+
+  theme(aspect.ratio = 3)+
+  ggtitle("Prediction (fixed effects + all random effects)")
