@@ -248,6 +248,23 @@ fit_2025 <- sdmTMB(
   family = Gamma(link = "log"),
   spatial = "on")
 
+summary_fit <- rbind(
+  tidy(fit_2021, "fixed", conf.int = TRUE),
+  tidy(fit_2021, "ran_pars", conf.int = TRUE),
+  tidy(fit_2022, "fixed", conf.int = TRUE),
+  tidy(fit_2022, "ran_pars", conf.int = TRUE),
+  tidy(fit_2023, "fixed", conf.int = TRUE),
+  tidy(fit_2023, "ran_pars", conf.int = TRUE),
+  tidy(fit_2025, "fixed", conf.int = TRUE),
+  tidy(fit_2025, "ran_pars", conf.int = TRUE)
+)
+summary_fit$model <- c(
+  rep("model_2021",4),
+  rep("model_2022",4),
+  rep("model_2023",4),
+  rep("model_2025",4)
+)
+
 ## check and validate the model ####
 sanity(fit_2021)
 sanity(fit_2022)
