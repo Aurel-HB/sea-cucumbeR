@@ -387,3 +387,12 @@ ggplot(map_predict, aes(X, Y, fill = cuts)) +
   coord_fixed()+
   theme(aspect.ratio = 3)+
   ggtitle("Prediction (fixed effects + all random effects)")
+
+
+###-###-###-###-###-###
+# TAC 2025 calculation ####
+###-###-###-###-###-###
+# TAC 1.5% of the 5e percentile biomass distribution for the model-based
+TAC_boostrap <- (1.5/100)*(compare_biomass$lwr[8])
+# the 5e percentile is replaced by lwr
+TAC_model <- (1.5/100)*(compare_biomass$lwr[9])
