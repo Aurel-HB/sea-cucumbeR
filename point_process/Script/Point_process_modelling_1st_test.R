@@ -54,7 +54,10 @@ PPP <- list_PPP[[stn]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
 PPP[["window"]][["units"]] <- list("metre","metres")
 #PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
 
-PPP <- list_PPP_epsg4461[[stn]]
+#PPP <- list_PPP_epsg4461[[stn]]
+## rescale the coordinates
+#PPP$x <- PPP$x/1000
+#PPP$y <- PPP$y/1000
 
 # statistic summary ####
 # spatial inhomogeneity : kernel smoothed estimate of intensity 
@@ -149,6 +152,7 @@ bigfit <- ppm(PPP ~ polynom(x,y,2))
 bigfit <- ppm(PPP ~ polynom(y,2))
 formula(bigfit)
 goodfit <- step(bigfit, trace=0)
+goodfit
 formula(goodfit)
 AIC(goodfit) # -> there is problem with to complex intensity model that block
 # further analysis of the point process
@@ -274,6 +278,7 @@ formule <- formula(goodfit)
 #fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 fitox1 <- kppm(PPP~y, clusters = "LGCP", method="clik2", model="matern",nu=0.3)
 #fitox1 <- kppm(PPP,formule, clusters = "LGCP", method="waag", model="matern",nu=0.3)
+fitox1
 
 #simulation
 X_LGCP <- simulate(fitox1); plot(X_LGCP[[1]])
@@ -408,6 +413,7 @@ formula <- as.formula(paste("pp",as.character(fit$trend)[1],
                             " + offset(im0_kernel_log_scaled)",sep="")) 
 lwppp <- ppm(formula)
 #lwppp <- ppm(pp~y+offset(im0_kernel_log_scaled))
+lwppp
 AIC(lwppp)
 
 X_inhom <- simulate(fit)
@@ -428,7 +434,7 @@ ggplot(data = Show_result)+
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
 
-#Q–Q plot of smoothed raw residuals Baddeley 2005 ####
+##Q–Q plot of smoothed raw residuals Baddeley 2005 ####
 # 1. Fit model
 fit <- lwppp
 # 2. Smoothed residual field for observed data
@@ -489,7 +495,7 @@ NEst_Kscore = computeNEst(mod = models,est = K_hat,N = N)
 K_scores = get_crps(dt = NEst_Kscore,models = models)
 
 K_PPP <- as.function(Kinhom(PPP,lambda = density.ppp(PPP,bw.scott(PPP))))(eval_points)
-K_scores_PPP <- get_crps_PPP(dt = NEst_Kscore,models = models,K_PPP = K_PPP)
+K_scores_PPP <- get_crps_PPP(dt = NEst_Kscore,models = models,est_PPP = K_PPP)
 
 ##### Intensity score ####
 
