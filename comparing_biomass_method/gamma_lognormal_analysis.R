@@ -12,8 +12,11 @@ library(ggspatial)
 library(sdmTMB)
 library(INLA)
 library(RColorBrewer)
+library(viridis)
 library(ape)
-#library(cowlot)
+library(ggpubr)
+library(cowplot)
+library(future)
 
 # load data ####
 calcul_area <- readRDS(paste(here(),
@@ -88,181 +91,508 @@ stock_surface <- as.numeric(st_area(calcul_area)/1e6)
 ###-###-###-###-###-###-###-###
 
 ## creation of the mesh with R-INLA ####
-#using the grid of the area
-bnd <- INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
-                                 convex = -0.04)
-bnd2 = INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
-                                 convex = -0.15)
+cutoff <- c(1,1.852,3,5)
+list_mesh_regular <- list()
+list_mesh_data_fit <- list()
+for (cut in cutoff){
+  #using the grid of the area
+  bnd <- INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
+                                   convex = -0.04)
+  bnd2 = INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
+                                   convex = -0.15)
+  
+  mesh_inla <- INLA::inla.mesh.2d(
+    loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
+    boundary = list(bnd,bnd2),
+    cutoff = cut, # minimum triangle edge length
+    max.edge = c(3*cut, 20*cut), # inner and outer max triangle lengths
+  ) # 1.852 is the distance in meter of a mile nautic
+  
+  list_mesh_regular[[paste("mesh_regular_",cut,sep="")]] <- make_mesh(
+    data_estimate,c("X", "Y"), mesh = mesh_inla)
+  
+  mesh_inla <- INLA::inla.mesh.2d(
+    loc = as.matrix(data_estimate[,c("X","Y")]),
+    boundary = list(bnd,bnd2),
+    cutoff = cut, # minimum triangle edge length
+    max.edge = c(3*cut, 20*cut), # inner and outer max triangle lengths
+  ) # 1.852 is the distance in meter of a mile nautic
+  
+  list_mesh_data_fit[[paste("mesh_data_fit_",cut,sep="")]] <- make_mesh(
+    data_estimate,c("X", "Y"), mesh = mesh_inla)
+}
 
-mesh_inla <- INLA::inla.mesh.2d(
-  loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
-  boundary = list(bnd,bnd2),
-  cutoff = 1.852, # minimum triangle edge length
-  max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
-) # 1.852 is the distance in meter of a mile nautic
+for (i in 1:length(cutoff)){
+  plot(list_mesh_regular[[i]]$mesh, main = NA, edge.color = "grey60", asp = 1)
+  points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+  
+  plot(list_mesh_data_fit[[i]]$mesh, main = NA, edge.color = "grey60", asp = 1)
+  points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+}
 
-mesh_regular <- make_mesh(data_estimate,
-                       c("X", "Y"), mesh = mesh_inla)
-plot(mesh_regular$mesh, main = NA, edge.color = "grey60", asp = 1)
-points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
 
-mesh_inla <- INLA::inla.mesh.2d(
-  loc = as.matrix(data_estimate[,c("X","Y")]),
-  boundary = list(bnd,bnd2),
-  cutoff = 1.852, # minimum triangle edge length
-  max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
-) # 1.852 is the distance in meter of a mile nautic
-
-mesh_data_fit <- make_mesh(data_estimate,
-                          c("X", "Y"), mesh = mesh_inla)
-plot(mesh_data_fit$mesh, main = NA, edge.color = "grey60", asp = 1)
-points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
-
-## fit model for the 2 meshes####
+## fit model for the 2 meshes' type ####
 data_estimate$time <- data_estimate$year
+grid_proj$time <- grid_proj$year
 
-fit_gamma_regular <- sdmTMB(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
-  data = data_estimate,
-  mesh = mesh_regular,
-  family = Gamma(link = "log"),
-  spatial = "on",
-  time = "time",
-  spatiotemporal = "IID"
-)
-
-fit_gamma_data_fit <- sdmTMB(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
-  data = data_estimate,
-  mesh = mesh_data_fit,
-  family = Gamma(link = "log"),
-  spatial = "on",
-  time = "time",
-  spatiotemporal = "IID"
-)
-
-fit_logn_regular <- sdmTMB(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
-  data = data_estimate,
-  mesh = mesh_regular,
-  family = lognormal(link = "log"),
-  spatial = "on",
-  time = "time",
-  spatiotemporal = "IID"
-)
-
-fit_logn_data_fit <- sdmTMB(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
-  data = data_estimate,
-  mesh = mesh_data_fit,
-  family = lognormal(link = "log"),
-  spatial = "on",
-  time = "time",
-  spatiotemporal = "IID"
-)
+list_fit <- list()
+for(i in 1:length(cutoff)){
+  cut <- cutoff[i]
+  mesh_regular <- list_mesh_regular[[i]]
+  mesh_data_fit <- list_mesh_data_fit[[i]]
+  
+  fit_gamma_regular <- sdmTMB(
+    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    data = data_estimate,
+    mesh = mesh_regular,
+    family = Gamma(link = "log"),
+    spatial = "on",
+    time = "time",
+    spatiotemporal = "IID"
+  )
+  
+  fit_gamma_data_fit <- sdmTMB(
+    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    data = data_estimate,
+    mesh = mesh_data_fit,
+    family = Gamma(link = "log"),
+    spatial = "on",
+    time = "time",
+    spatiotemporal = "IID"
+  )
+  
+  fit_logn_regular <- sdmTMB(
+    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    data = data_estimate,
+    mesh = mesh_regular,
+    family = lognormal(link = "log"),
+    spatial = "on",
+    time = "time",
+    spatiotemporal = "IID"
+  )
+  
+  fit_logn_data_fit <- sdmTMB(
+    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    data = data_estimate,
+    mesh = mesh_data_fit,
+    family = lognormal(link = "log"),
+    spatial = "on",
+    time = "time",
+    spatiotemporal = "IID"
+  )
+  
+  list_fit[[paste("fit_gamma_regular_",cut,sep="")]] <- fit_gamma_regular
+  list_fit[[paste("fit_gamma_data_fit_",cut,sep="")]] <- fit_gamma_data_fit
+  list_fit[[paste("fit_logn_regular_",cut,sep="")]] <- fit_logn_regular
+  list_fit[[paste("fit_logn_data_fit_",cut,sep="")]] <- fit_logn_data_fit
+}
 
 ## check the result ####
-sanity(fit_gamma_regular)
-sanity(fit_gamma_data_fit)
-sanity(fit_logn_regular)
-sanity(fit_logn_data_fit)
+for (i in 1:length(list_fit)){
+  sanity(list_fit[[i]])
+  print(paste("Check number",i,sep = " "))
+}
+# model number 12 and 15 have not pass the sanity check
+#list_fit[[12]] <- "sanity_error"
+#list_fit[[15]] <- "sanity_error"
 
-par(mfrow = c(2,2))
-data_estimate$resids_gamma_regular <- residuals(fit_gamma_regular) 
-# randomized quantile residuals
-qqnorm(data_estimate$resids_gamma_regular, main = "Normal Q-Q Plot Gamma Regular Mesh")
-qqline(data_estimate$resids_gamma_regular)
+for (i in 1:length(cutoff)){
+  par(mfrow = c(2,2))
+  resids_gamma_regular <- residuals(list_fit[[1+4*(i-1)]]) 
+  # randomized quantile residuals
+  qqnorm(resids_gamma_regular, main = "Normal Q-Q Plot Gamma Regular Mesh")
+  qqline(resids_gamma_regular)
+  
+  resids_gamma_data_fit <- residuals(list_fit[[2+4*(i-1)]]) 
+  # randomized quantile residuals
+  qqnorm(resids_gamma_data_fit, main = "Normal Q-Q Plot Gamma Data-fit Mesh")
+  qqline(resids_gamma_data_fit)
+  
+  resids_logn_regular <- residuals(list_fit[[3+4*(i-1)]]) 
+  # randomized quantile residuals
+  qqnorm(resids_logn_regular, main = "Normal Q-Q Plot Lognormal Regular Mesh")
+  qqline(resids_logn_regular)
+  
+  resids_logn_data_fit <- residuals(list_fit[[4+4*(i-1)]]) 
+  # randomized quantile residuals
+  qqnorm(resids_logn_data_fit, main = "Normal Q-Q Plot Lognormal Data-fit Mesh")
+  qqline(resids_logn_data_fit)
+  par(mfrow = c(1,1))
+}
 
-data_estimate$resids_gamma_data_fit <- residuals(fit_gamma_data_fit) 
-# randomized quantile residuals
-qqnorm(data_estimate$resids_gamma_data_fit, main = "Normal Q-Q Plot Gamma Data-fit Mesh")
-qqline(data_estimate$resids_gamma_data_fit)
-
-data_estimate$resids_logn_regular <- residuals(fit_logn_regular) 
-# randomized quantile residuals
-qqnorm(data_estimate$resids_logn_regular, main = "Normal Q-Q Plot Lognormal Regular Mesh")
-qqline(data_estimate$resids_logn_regular)
-
-data_estimate$resids_logn_data_fit <- residuals(fit_logn_data_fit) 
-# randomized quantile residuals
-qqnorm(data_estimate$resids_logn_data_fit, main = "Normal Q-Q Plot Lognormal Data-fit Mesh")
-qqline(data_estimate$resids_logn_data_fit)
-par(mfrow = c(1,1))
 
 ### Moran index per year ###
 moran <- data.frame()
 sim <- c()
-for (i in 1:1000){
-  data_estimate$resids_gamma_regular <- residuals(fit_gamma_regular) 
-  data_estimate$resids_gamma_data_fit <- residuals(fit_gamma_data_fit)
-  data_estimate$resids_logn_regular <- residuals(fit_logn_regular)
-  data_estimate$resids_logn_data_fit <- residuals(fit_logn_data_fit)
-  
-  for (time in unique(data_estimate$year)){
-    # calcul weight
-    dists <- as.matrix(dist(data_estimate[
-      grep(time,data_estimate$year), c("X", "Y")]))
-    inv_dists <- 1 / dists
-    diag(inv_dists) <- 0
-    inv_dists[is.infinite(inv_dists)] <- 0
+for(c in 1:length(cutoff)){
+  for (i in 1:1000){
+    data_estimate$resids_gamma_regular <- residuals(list_fit[[1+4*(c-1)]]) 
+    data_estimate$resids_gamma_data_fit <- residuals(list_fit[[2+4*(c-1)]])
+    data_estimate$resids_logn_regular <- residuals(list_fit[[3+4*(c-1)]]) 
+    data_estimate$resids_logn_data_fit <- residuals(list_fit[[4+4*(c-1)]])
     
-    #gamma regular
-    data <- Moran.I(data_estimate$resids_gamma_regular[data_estimate$year==time],
-                    inv_dists, scaled = TRUE)
-    data$year <- time
-    data$mesh <- "Regular"
-    data$model <- "Gamma"
-    moran <- rbind(moran, data)
-    
-    #gamma data-fit
-    data <- Moran.I(data_estimate$resids_gamma_data_fit[data_estimate$year==time],
-                    inv_dists, scaled = TRUE)
-    data$year <- time
-    data$mesh <- "Data-fit"
-    data$model <- "Gamma"
-    moran <- rbind(moran, data)
-    
-    #logn regular
-    data <- Moran.I(data_estimate$resids_logn_regular[data_estimate$year==time],
-                    inv_dists, scaled = TRUE)
-    data$year <- time
-    data$mesh <- "Regular"
-    data$model <- "Lognormal"
-    moran <- rbind(moran, data)
-    
-    #logn data-fit
-    data <- Moran.I(data_estimate$resids_logn_data_fit[data_estimate$year==time],
-                    inv_dists, scaled = TRUE)
-    data$year <- time
-    data$mesh <- "Data-fit"
-    data$model <- "Lognormal"
-    moran <- rbind(moran, data)
+    for (time in unique(data_estimate$year)){
+      # calcul weight
+      dists <- as.matrix(dist(data_estimate[
+        grep(time,data_estimate$year), c("X", "Y")]))
+      inv_dists <- 1 / dists
+      diag(inv_dists) <- 0
+      inv_dists[is.infinite(inv_dists)] <- 0
+      
+      #gamma regular
+      data <- Moran.I(data_estimate$resids_gamma_regular[data_estimate$year==time],
+                      inv_dists, scaled = TRUE)
+      data$year <- time
+      data$mesh <- "Regular"
+      data$model <- "Gamma"
+      data$cutoff <- cutoff[c]
+      moran <- rbind(moran, data)
+      
+      #gamma data-fit
+      data <- Moran.I(data_estimate$resids_gamma_data_fit[data_estimate$year==time],
+                      inv_dists, scaled = TRUE)
+      data$year <- time
+      data$mesh <- "Data-fit"
+      data$model <- "Gamma"
+      data$cutoff <- cutoff[c]
+      moran <- rbind(moran, data)
+      
+      #logn regular
+      data <- Moran.I(data_estimate$resids_logn_regular[data_estimate$year==time],
+                      inv_dists, scaled = TRUE)
+      data$year <- time
+      data$mesh <- "Regular"
+      data$model <- "Lognormal"
+      data$cutoff <- cutoff[c]
+      moran <- rbind(moran, data)
+      
+      #logn data-fit
+      data <- Moran.I(data_estimate$resids_logn_data_fit[data_estimate$year==time],
+                      inv_dists, scaled = TRUE)
+      data$year <- time
+      data$mesh <- "Data-fit"
+      data$model <- "Lognormal"
+      data$cutoff <- cutoff[c]
+      moran <- rbind(moran, data)
+    }
+    sim <- c(sim, rep(paste("sim",i,sep="_"),16))
   }
-  sim <- c(sim, rep(paste("sim",i,sep="_"),16))
+  
 }
+
 moran$sim <- sim
 moran$signif <- FALSE
 moran$signif[moran$p.value<0.05] <- TRUE
+saveRDS(moran,paste(here(),
+                    "/comparing_biomass_method/output/moran_simulation.rds",
+                    sep=""))
+
 summary_moran <- data.frame(moran[grep("sim_1000",moran$sim),
-                                  c("year","mesh","model")],
+                                  c("year","mesh","model","cutoff")],
                             percent_ns=0)
 for (i in 1:nrow(summary_moran)){
   time = summary_moran$year[i]
   type = summary_moran$mesh[i]
   distrib = summary_moran$model[i]
+  cut = summary_moran$cutoff[i]
   data <- moran %>% filter(year==time) %>% filter(mesh==type) %>%
-    filter(model==distrib)
+    filter(model==distrib) %>% filter(cut==cutoff)
   summary_moran$percent_ns[i] <- length(grep(TRUE,data$signif))*100/nrow(data)
 }
-rm(time,type,data)
+rm(time,type,data,distrib,cut)
 
-ggplot(data = summary_moran, aes(x = as.factor(year), y = as.factor(mesh)))+
-  #geom_raster(aes(fill = percent_ns))+
-  geom_point(aes(colour = percent_ns),shape=15, size=13)+
-  #scale_colour_viridis_c(option = "plasma")+
-  scale_color_gradient2(low="slateblue",mid = "#eeeeaa",high = "red3",
-                        midpoint = 10)+
-  geom_point(shape=22, size=15)+
+ggplot(data = summary_moran, aes(x = as.factor(year), y = as.factor(mesh),
+                                 fill = percent_ns))+
+  geom_tile(color = "white")+
+  scale_fill_distiller(palette = "RdYlBu")+
   geom_text(aes(label = percent_ns))+
-  facet_wrap(~model, nrow=1)+
+  facet_wrap(cutoff~model, ncol=2)+
   labs(fill = "% significant Moran's index", x = "Year", y = "Mesh type")
+
+# It seems that the gamma models capt better the residual spatial autocorrelation
+
+### Observed vs predicted ###
+list_ggscatter <- list()
+for (i in 1:16){
+  predicted <- exp(predict(list_fit[[i]])$est)
+  observed <- list_fit[[i]]$data$density.t_km2
+  
+  list_ggscatter[[names(list_fit)[i]]] <- ggscatter(
+    data.frame(observed,predicted),x = "observed", y = "predicted",
+            add = "reg.line", title = names(list_fit)[i]) +
+    stat_cor(label.x = 1000, label.y = 3000) +
+    stat_regline_equation(label.x = 2000, label.y = 6.5)
+}
+
+plot_grid(
+  list_ggscatter[[1]],
+  list_ggscatter[[2]],
+  list_ggscatter[[3]],
+  list_ggscatter[[4]],
+  list_ggscatter[[5]],
+  list_ggscatter[[6]],
+  list_ggscatter[[7]],
+  list_ggscatter[[8]],
+  list_ggscatter[[9]],
+  list_ggscatter[[10]],
+  list_ggscatter[[11]],
+  list_ggscatter[[12]],
+  list_ggscatter[[13]],
+  list_ggscatter[[14]],
+  list_ggscatter[[15]],
+  list_ggscatter[[16]]
+)
+
+## cross validation ####
+# the previous result enable to choose the gamma models with 1 or 1.852 cutoff
+
+### cross validation random ###
+n_folds = 20
+
+set.seed(44)
+plan(multisession, workers = 8)
+m_cv_gamma_regular_1 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_regular$mesh_regular_1,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_gamma_regular_1$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(44)
+plan(multisession, workers = 8)
+m_cv_gamma_data_fit_1 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_data_fit$mesh_data_fit_1,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_gamma_regular_1$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(44)
+plan(multisession, workers = 8)
+m_cv_gamma_regular_1.852 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_regular$mesh_regular_1.852,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_gamma_regular_1$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(44)
+plan(multisession, workers = 8)
+m_cv_gamma_data_fit_1.852 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_data_fit$mesh_data_fit_1.852,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_gamma_regular_1$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+m_cv_gamma_regular_1$sum_loglik # total log-likelihood
+m_cv_gamma_data_fit_1$sum_loglik # total log-likelihood
+m_cv_gamma_regular_1.852$sum_loglik # total log-likelihood
+m_cv_gamma_data_fit_1.852$sum_loglik # total log-likelihood
+
+
+### cross validation with spatial cluster ###
+
+#cluster by time and space 
+k <- 8
+clust_2021 <- kmeans(data_estimate %>% filter(year==2021)%>%select(X,Y), k)$cluster
+clust_2022 <- kmeans(data_estimate %>% filter(year==2022)%>%select(X,Y), k)$cluster
+clust_2023 <- kmeans(data_estimate %>% filter(year==2023)%>%select(X,Y), k)$cluster
+clust_2025 <- kmeans(data_estimate %>% filter(year==2025)%>%select(X,Y), k)$cluster
+clust <- c(clust_2021,clust_2022+k,clust_2023+(k*2),clust_2025+(k*3))
+data_estimate$clust <- clust
+
+
+set.seed(13)
+plan(multisession, workers = 8)
+s_cv_gamma_regular_1 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_regular$mesh_regular_1,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_gamma_regular_1$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(13)
+plan(multisession, workers = 8)
+s_cv_gamma_data_fit_1 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_data_fit$mesh_data_fit_1,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_gamma_data_fit_1$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(13)
+plan(multisession, workers = 8)
+s_cv_gamma_regular_1.852 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_regular$mesh_regular_1.852,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_gamma_regular_1.852$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(13)
+plan(multisession, workers = 8)
+s_cv_gamma_data_fit_1.852 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  data = data_estimate,
+  mesh = list_mesh_data_fit$mesh_data_fit_1.852,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_gamma_data_fit_1.852$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+s_cv_gamma_regular_1$sum_loglik # total log-likelihood
+s_cv_gamma_data_fit_1$sum_loglik # total log-likelihood
+s_cv_gamma_regular_1.852$sum_loglik # total log-likelihood
+s_cv_gamma_data_fit_1.852$sum_loglik # total log-likelihood
+
+
+## show prediction ####
+# take the adapted column from the grid in prediction
+predictions_gamma_regular <- predict(list_fit[[5]], newdata = grid_proj %>%
+                                       select(X,Y,year,time) %>%
+                                       filter(time!=2024),
+                       return_tmb_object = TRUE,se_fit = TRUE)
+
+predictions_gamma_data_fit <- predict(list_fit[[6]], newdata = grid_proj %>%
+                                       select(X,Y,year,time) %>%
+                                       filter(time!=2024),
+                                     return_tmb_object = TRUE,se_fit = TRUE)
+
+#Let’s make a small function to make maps
+plot_map <- function(dat, column) {
+  ggplot(dat, aes(X, Y, fill = {{ column }})) +
+    geom_raster() +
+    facet_wrap(~year, nrow = 1) +
+    coord_fixed()+
+    theme(aspect.ratio = 3)
+}
+
+### show prediction density ###
+plot_map(predictions_gamma_regular$data, exp(est)) +
+  scale_fill_viridis_c(trans = "sqrt")+
+  ggtitle("Prediction (fixed effects + all random effects)")
+
+### show spatial random effects ###
+plot_map(predictions_gamma_regular$data, omega_s) +
+  ggtitle("Spatial random effects only") +
+  scale_fill_gradient2()
+
+### show spatiotemporal random effects ###
+plot_map(predictions_gamma_regular$data, epsilon_st) +
+  ggtitle("Spatiotemporal random effects only") +
+  scale_fill_gradient2()
+
+### plot the density as sequential data ###
+cut_min <- trunc(predictions_gamma_regular$data$est)
+#cut_min <- trunc(predictions_gamma_data_fit$data$est)
+cut_max <- cut_min+1
+cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
+
+for (i in 1:length(cuts)){
+  if (cuts[i]=="(8-9]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(9-10]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(10-11]"){
+    cuts[i] <- ">8"
+  }
+}
+
+predictions_gamma_regular$data$cuts <- as.factor(cuts)
+predictions_gamma_data_fit$data$cuts <- as.factor(cuts)
+
+ggplot(predictions_gamma_regular$data, aes(X, Y, fill = cuts)) +
+  geom_raster() +
+  scale_fill_brewer("log(density)", type = "seq", palette = "YlOrRd")+
+  facet_wrap(~year, nrow = 1) +
+  coord_fixed()+
+  theme(aspect.ratio = 3)+
+  ggtitle("Prediction (fixed effects + all random effects)")
+
+ggplot(predictions_gamma_data_fit$data, aes(X, Y, fill = cuts)) +
+  geom_raster() +
+  scale_fill_brewer("log(density)", type = "seq", palette = "YlOrRd")+
+  facet_wrap(~year, nrow = 1) +
+  coord_fixed()+
+  theme(aspect.ratio = 3)+
+  ggtitle("Prediction (fixed effects + all random effects)")
+
+
+index_gamma_regular <- get_index(predictions_gamma_regular, area = 0.25,
+                                 bias_correct = TRUE)
+
+index_gamma_data_fit <- get_index(predictions_gamma_data_fit, area = 0.25,
+                                  bias_correct = TRUE)
