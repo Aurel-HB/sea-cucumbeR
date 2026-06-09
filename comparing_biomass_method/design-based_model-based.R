@@ -13,6 +13,7 @@ library(sdmTMB)
 library(INLA)
 library(RColorBrewer)
 library(XML)
+library(scales)
 
 # load data ####
 calcul_area <- readRDS(paste(here(),
@@ -170,23 +171,39 @@ boot_result <- rbind(boot_result,extract_boot_stat(bootobject_2025))
 row.names(boot_result) <- c(2021,2022,2023,2025)
 
 ## show result ####
-# Créer l'histogramme avec ggplot2
-ggplot(data.frame(Biomass = as.numeric(bootobject_2025[["t"]])), aes(x = Biomass)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "lightblue", color = "black") +
-  geom_density(col='red') +
-  geom_vline(aes(xintercept = boot_result["2025",]$median_value), 
-             color = "black", linetype = "dashed", linewidth = 1) +
-  geom_vline(aes(xintercept = boot_result["2025",]$quantile_5), 
-             color = "black", linetype = "dashed", linewidth = 1) +
-  geom_vline(aes(xintercept = boot_result["2025",]$quantile_95), 
-             color = "black", linetype = "dashed", linewidth = 1) +
-  geom_vline(aes(xintercept = boot_result["2025",]$mean_value), 
-             color = "blue", linetype = "dashed", linewidth = 1) +
-  labs(title = "Histogramme des Biomasses obtenues par Bootstrap",
-       x = "Biomasse",
-       y = "Densité") +
-  scale_x_continuous(labels = scales::label_comma())+
-  theme_minimal()
+# create histrogram with ggplot2
+list_boot <- list(
+  "2021" = bootobject_2021,
+  "2022" = bootobject_2022,
+  "2023" = bootobject_2023,
+  "2025" = bootobject_2025
+)
+
+year <- "2021"# year <- "2022" year <- "2023" year <- "2025"
+data <- as.numeric(list_boot[[year]][["t"]])
+assign( paste("histo_boot",year,sep = "_"),
+        ggplot(data.frame(Biomass = data), 
+               aes(x = Biomass)) +
+          geom_histogram(aes(y = after_stat(density)), bins = 30,
+                         fill = "lightblue",
+                         color = "black") +
+          geom_density(col='red') +
+          geom_vline(aes(xintercept = boot_result[year,]$median_value), 
+                     color = "black", linetype = "dashed", linewidth = 1) +
+          geom_vline(aes(xintercept = boot_result[year,]$quantile_5), 
+                     color = "black", linetype = "dashed", linewidth = 1) +
+          geom_vline(aes(xintercept = boot_result[year,]$quantile_95), 
+                     color = "black", linetype = "dashed", linewidth = 1) +
+          geom_vline(aes(xintercept = boot_result[year,]$mean_value), 
+                     color = "blue", linetype = "dashed", linewidth = 1) +
+          labs(title = paste("Histogram of Biomasses from",year,
+                             "using Bootstrap", sep = " "),
+               x = "Biomass",
+               y = "Density") +
+          scale_x_continuous(labels = scales::label_comma())+
+          theme_minimal()
+  )
+
 
 
 ###-###-###-###-###-###-###-###
@@ -388,6 +405,15 @@ ggplot(map_predict, aes(X, Y, fill = cuts)) +
   theme(aspect.ratio = 3)+
   ggtitle("Prediction (fixed effects + all random effects)")
 
+# plot the Coefficent of Variation across the map
+ggplot(map_predict, aes(X, Y, fill = est_se/est)) +
+  geom_raster() +
+  #scale_fill_viridis_c()+
+  scale_fill_gradient2(low = muted("blue"),midpoint = 0.2,
+                       high = muted("red")) +
+  facet_wrap(~date,nrow=1)+
+  coord_fixed(expand = FALSE)+
+  theme(aspect.ratio = 3)
 
 ###-###-###-###-###-###
 # TAC 2025 calculation ####
