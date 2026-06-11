@@ -142,7 +142,7 @@ for(i in 1:length(cutoff)){
   mesh_data_fit <- list_mesh_data_fit[[i]]
   
   fit_gamma_regular <- sdmTMB(
-    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    density.t_km2 ~ 1+as.factor(year),
     data = data_estimate,
     mesh = mesh_regular,
     family = Gamma(link = "log"),
@@ -152,7 +152,7 @@ for(i in 1:length(cutoff)){
   )
   
   fit_gamma_data_fit <- sdmTMB(
-    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    density.t_km2 ~ 1+as.factor(year),
     data = data_estimate,
     mesh = mesh_data_fit,
     family = Gamma(link = "log"),
@@ -162,7 +162,7 @@ for(i in 1:length(cutoff)){
   )
   
   fit_logn_regular <- sdmTMB(
-    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    density.t_km2 ~ 1+as.factor(year),
     data = data_estimate,
     mesh = mesh_regular,
     family = lognormal(link = "log"),
@@ -172,7 +172,7 @@ for(i in 1:length(cutoff)){
   )
   
   fit_logn_data_fit <- sdmTMB(
-    density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+    density.t_km2 ~ 1+as.factor(year),
     data = data_estimate,
     mesh = mesh_data_fit,
     family = lognormal(link = "log"),
@@ -186,6 +186,7 @@ for(i in 1:length(cutoff)){
   list_fit[[paste("fit_logn_regular_",cut,sep="")]] <- fit_logn_regular
   list_fit[[paste("fit_logn_data_fit_",cut,sep="")]] <- fit_logn_data_fit
 }
+rm(fit_logn_data_fit,fit_logn_regular,fit_gamma_data_fit,fit_gamma_regular)
 
 ## check the result ####
 for (i in 1:length(list_fit)){
@@ -283,9 +284,12 @@ for(c in 1:length(cutoff)){
 moran$sim <- sim
 moran$signif <- FALSE
 moran$signif[moran$p.value<0.05] <- TRUE
-saveRDS(moran,paste(here(),
-                    "/comparing_biomass_method/output/moran_simulation.rds",
-                    sep=""))
+#saveRDS(moran,paste(here(),
+#                    "/comparing_biomass_method/output/moran_simulation.rds",
+#                    sep=""))
+#moran <- readRDS(paste(here(),
+#                    "/comparing_biomass_method/output/moran_simulation.rds",
+#                    sep=""))
 
 summary_moran <- data.frame(moran[grep("sim_1000",moran$sim),
                                   c("year","mesh","model","cutoff")],
@@ -306,7 +310,8 @@ ggplot(data = summary_moran, aes(x = as.factor(year), y = as.factor(mesh),
   geom_tile(color = "white")+
   scale_fill_distiller(palette = "RdYlBu")+
   geom_text(aes(label = percent_ns))+
-  facet_wrap(cutoff~model, ncol=2)+
+  facet_wrap(cutoff~model, ncol=2, labeller = labeller(cutoff = label_both, 
+                                                       model = label_value))+
   labs(fill = "% significant Moran's index", x = "Year", y = "Mesh type")
 
 # It seems that the gamma models capt better the residual spatial autocorrelation
@@ -352,7 +357,7 @@ n_folds = 20
 set.seed(44)
 plan(multisession, workers = 8)
 m_cv_gamma_regular_1 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_regular$mesh_regular_1,
   family = Gamma(link = "log"),
@@ -370,7 +375,7 @@ for (i in 1:n_folds){
 set.seed(44)
 plan(multisession, workers = 8)
 m_cv_gamma_data_fit_1 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_data_fit$mesh_data_fit_1,
   family = Gamma(link = "log"),
@@ -388,7 +393,7 @@ for (i in 1:n_folds){
 set.seed(44)
 plan(multisession, workers = 8)
 m_cv_gamma_regular_1.852 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_regular$mesh_regular_1.852,
   family = Gamma(link = "log"),
@@ -406,7 +411,7 @@ for (i in 1:n_folds){
 set.seed(44)
 plan(multisession, workers = 8)
 m_cv_gamma_data_fit_1.852 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_data_fit$mesh_data_fit_1.852,
   family = Gamma(link = "log"),
@@ -442,7 +447,7 @@ data_estimate$clust <- clust
 set.seed(13)
 plan(multisession, workers = 8)
 s_cv_gamma_regular_1 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_regular$mesh_regular_1,
   family = Gamma(link = "log"),
@@ -460,7 +465,7 @@ for (i in 1:max(unique(clust))){
 set.seed(13)
 plan(multisession, workers = 8)
 s_cv_gamma_data_fit_1 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_data_fit$mesh_data_fit_1,
   family = Gamma(link = "log"),
@@ -478,7 +483,7 @@ for (i in 1:max(unique(clust))){
 set.seed(13)
 plan(multisession, workers = 8)
 s_cv_gamma_regular_1.852 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_regular$mesh_regular_1.852,
   family = Gamma(link = "log"),
@@ -496,7 +501,7 @@ for (i in 1:max(unique(clust))){
 set.seed(13)
 plan(multisession, workers = 8)
 s_cv_gamma_data_fit_1.852 <- sdmTMB_cv(
-  density.t_km2 ~ 1+as.factor(year),#<< fixed intercept ignoring time
+  density.t_km2 ~ 1+as.factor(year),
   data = data_estimate,
   mesh = list_mesh_data_fit$mesh_data_fit_1.852,
   family = Gamma(link = "log"),
@@ -516,14 +521,52 @@ s_cv_gamma_data_fit_1$sum_loglik # total log-likelihood
 s_cv_gamma_regular_1.852$sum_loglik # total log-likelihood
 s_cv_gamma_data_fit_1.852$sum_loglik # total log-likelihood
 
+# all the model from the CV had converge
+# we stack the sum_loglik in a dataframe
+cv_sum_loglik <- data.frame(
+  model = rep(c("gamma_regular_1","gamma_data_fit_1",
+                "gamma_regular_1.852","gamma_data_fit_1.852"),2),
+  CV_type = c(rep("random",4),rep("spatial_cluster",4)),
+  sum_loglik = c(
+    m_cv_gamma_regular_1$sum_loglik,
+    m_cv_gamma_data_fit_1$sum_loglik, 
+    m_cv_gamma_regular_1.852$sum_loglik, 
+    m_cv_gamma_data_fit_1.852$sum_loglik, 
+    s_cv_gamma_regular_1$sum_loglik, 
+    s_cv_gamma_data_fit_1$sum_loglik, 
+    s_cv_gamma_regular_1.852$sum_loglik, 
+    s_cv_gamma_data_fit_1.852$sum_loglik 
+  )
+)
 
 ## show prediction ####
-# take the adapted column from the grid in prediction
-predictions_gamma_regular <- predict(list_fit[[5]], newdata = grid_proj %>%
-                                       select(X,Y,year,time) %>%
-                                       filter(time!=2024),
-                       return_tmb_object = TRUE,se_fit = TRUE)
+### compare the total index of biomass ###
+index_comparison <- data.frame()
+for (name in c("fit_gamma_regular_1","fit_gamma_data_fit_1",
+               "fit_gamma_regular_1.852","fit_gamma_data_fit_1.852")){
+  prediction <- predict(list_fit[[name]], newdata = grid_proj %>%
+                          select(X,Y,year,time) %>%
+                          filter(time!=2024),
+                        return_tmb_object = TRUE,se_fit = TRUE)
+  
+  index <- get_index(prediction, area = 0.25, bias_correct = TRUE)
+  index$model <- name
+  
+  index_comparison <- rbind(index_comparison,index)
+}
+rm(prediction,index)
 
+index_time <- c(0,0,0,0,0.1,0.1,0.1,0.1,0.2,0.2,0.2,0.2,0.3,0.3,0.3,0.3)
+index_comparison$time <- index_comparison$time + index_time
+
+ggplot(index_comparison,aes(x = time, y = est, colour = model))+
+  geom_point(show.legend = T)+
+  geom_errorbar(aes( ymin = lwr, ymax = upr), width = 0.2,show.legend = F)+
+  labs(x = "", y = "Biomass (tonnes)", title = "Biomass from survey")+
+  theme_bw()
+
+### Map the prediction from the chosen model ###
+# take the adapted column from the grid in prediction
 predictions_gamma_data_fit <- predict(list_fit[[6]], newdata = grid_proj %>%
                                        select(X,Y,year,time) %>%
                                        filter(time!=2024),
@@ -539,22 +582,22 @@ plot_map <- function(dat, column) {
 }
 
 ### show prediction density ###
-plot_map(predictions_gamma_regular$data, exp(est)) +
+plot_map(predictions_gamma_data_fit$data, exp(est)) +
   scale_fill_viridis_c(trans = "sqrt")+
   ggtitle("Prediction (fixed effects + all random effects)")
 
 ### show spatial random effects ###
-plot_map(predictions_gamma_regular$data, omega_s) +
+plot_map(predictions_gamma_data_fit$data, omega_s) +
   ggtitle("Spatial random effects only") +
   scale_fill_gradient2()
 
 ### show spatiotemporal random effects ###
-plot_map(predictions_gamma_regular$data, epsilon_st) +
+plot_map(predictions_gamma_data_fit$data, epsilon_st) +
   ggtitle("Spatiotemporal random effects only") +
   scale_fill_gradient2()
 
 ### plot the density as sequential data ###
-cut_min <- trunc(predictions_gamma_regular$data$est)
+cut_min <- trunc(predictions_gamma_data_fit$data$est)
 #cut_min <- trunc(predictions_gamma_data_fit$data$est)
 cut_max <- cut_min+1
 cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
@@ -571,16 +614,7 @@ for (i in 1:length(cuts)){
   }
 }
 
-predictions_gamma_regular$data$cuts <- as.factor(cuts)
 predictions_gamma_data_fit$data$cuts <- as.factor(cuts)
-
-ggplot(predictions_gamma_regular$data, aes(X, Y, fill = cuts)) +
-  geom_raster() +
-  scale_fill_brewer("log(density)", type = "seq", palette = "YlOrRd")+
-  facet_wrap(~year, nrow = 1) +
-  coord_fixed()+
-  theme(aspect.ratio = 3)+
-  ggtitle("Prediction (fixed effects + all random effects)")
 
 ggplot(predictions_gamma_data_fit$data, aes(X, Y, fill = cuts)) +
   geom_raster() +
@@ -590,9 +624,411 @@ ggplot(predictions_gamma_data_fit$data, aes(X, Y, fill = cuts)) +
   theme(aspect.ratio = 3)+
   ggtitle("Prediction (fixed effects + all random effects)")
 
+###-###-###-###-###-###-###
+# Covariates analysis ####
+###-###-###-###-###-###-###
 
-index_gamma_regular <- get_index(predictions_gamma_regular, area = 0.25,
-                                 bias_correct = TRUE)
+## check the correlation between the covariates and the density
+ggplot(data=data_holotv, aes(x = bathy, y = density.t_km2)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Depth (m)", y = "Density")
 
-index_gamma_data_fit <- get_index(predictions_gamma_data_fit, area = 0.25,
-                                  bias_correct = TRUE)
+ggplot(data=data_holotv, aes(x = temp, y = density.t_km2)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Bottom temp (°C)", y = "Density")
+
+ggplot(data=data_holotv, aes(x = chla, y = density.t_km2)) +
+  geom_point() +
+  facet_wrap(~ year) +
+  labs(x = "Mass concentration of chlorophyll a (mg/m3)", y = "Density")
+
+## creation of the mesh with R-INLA ####
+bnd <- INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
+                                   convex = -0.04)
+bnd2 = INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
+                                   convex = -0.15)
+  
+mesh_inla <- INLA::inla.mesh.2d(
+    loc = as.matrix(data_estimate[,c("X","Y")]),
+    boundary = list(bnd,bnd2),
+    cutoff = 1.852, # minimum triangle edge length
+    max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
+  ) # 1.852 is the distance in meter of a mile nautic
+  
+mesh <- make_mesh(data_estimate,c("X", "Y"), mesh = mesh_inla)
+
+plot(mesh$mesh, main = NA, edge.color = "grey60", asp = 1)
+points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+
+
+## fit model with different covariates ####
+
+### prepare the data ###
+# keep only the column needed
+data_estimate <- as.data.frame(data_holotv) %>% 
+  select(station,X,Y,density.t_km2,year,temp,bathy,chla)
+grid_proj <- as.data.frame(grid_tot)[,1:6]
+data_estimate$time <- data_estimate$year
+grid_proj$time <- grid_proj$year
+
+fit_none <- sdmTMB(
+  density.t_km2 ~ 1+as.factor(year),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID"
+)
+sanity(fit_none)
+
+fit_bathy <- sdmTMB(
+  density.t_km2 ~ 1+as.factor(year)+smooth(bathy),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID"
+)
+sanity(fit_bathy)
+
+fit_temp <- sdmTMB(
+  density.t_km2 ~ 1+as.factor(year)+smooth(temp),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID"
+)
+sanity(fit_temp)
+
+fit_temp_bathy <- sdmTMB(
+  density.t_km2 ~ 1+as.factor(year)+smooth(temp)+smooth(bathy),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID"
+)
+sanity(fit_temp_bathy)
+
+## check the result ####
+
+### residuals ###
+par(mfrow = c(2,2))
+resids_none <- residuals(fit_none) 
+# randomized quantile residuals
+qqnorm(resids_none, main = "Normal Q-Q Plot Gamma")
+qqline(resids_none)
+
+resids_bathy <- residuals(fit_bathy) 
+# randomized quantile residuals
+qqnorm(resids_bathy, main = "Normal Q-Q Plot Gamma Bathymetry")
+qqline(resids_bathy)
+
+resids_temp <- residuals(fit_temp) 
+# randomized quantile residuals
+qqnorm(resids_temp, main = "Normal Q-Q Plot Gamma Bottom temperature")
+qqline(resids_temp)
+
+resids_temp_bathy <- residuals(fit_temp_bathy) 
+# randomized quantile residuals
+qqnorm(resids_temp_bathy, main = "Normal Q-Q Plot Gamma Bathymetry and Bottom Temperature")
+qqline(resids_temp_bathy)
+par(mfrow = c(1,1))
+
+### Observed vs predicted ###
+observed <- fit_none$data$density.t_km2
+predicted_none <- exp(predict(fit_none)$est)
+predicted_bathy <- exp(predict(fit_bathy)$est)
+predicted_temp <- exp(predict(fit_temp)$est)
+predicted_temp_bathy <- exp(predict(fit_temp_bathy)$est)
+
+plot_grid(
+  ggscatter(
+    data.frame(observed,predicted_none),x = "observed", y = "predicted_none",
+    add = "reg.line", title = "No covariates") +
+    stat_cor(label.x = 1000, label.y = 3000) +
+    stat_regline_equation(label.x = 2000, label.y = 6.5),
+  ggscatter(
+    data.frame(observed,predicted_bathy),x = "observed", y = "predicted_bathy",
+    add = "reg.line", title = "Bathymetry") +
+    stat_cor(label.x = 1000, label.y = 3000) +
+    stat_regline_equation(label.x = 2000, label.y = 6.5),
+  ggscatter(
+    data.frame(observed,predicted_temp),x = "observed", y = "predicted_temp",
+    add = "reg.line", title = "Bottom temperature") +
+    stat_cor(label.x = 1000, label.y = 3000) +
+    stat_regline_equation(label.x = 2000, label.y = 6.5),
+  ggscatter(
+    data.frame(observed,predicted_temp_bathy),x = "observed", y = "predicted_temp_bathy",
+    add = "reg.line", title = "Bathymetry and Bottom temperature") +
+    stat_cor(label.x = 1000, label.y = 3000) +
+    stat_regline_equation(label.x = 2000, label.y = 6.5)
+)
+
+## cross validation ####
+# the previous result enable to choose the gamma models with 1 or 1.852 cutoff
+
+### cross validation random ###
+n_folds = 20
+
+set.seed(22)
+plan(multisession, workers = 8)
+m_cv_none <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_none$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(22)
+plan(multisession, workers = 8)
+m_cv_bathy <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year)+smooth(bathy),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_bathy$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(22)
+plan(multisession, workers = 8)
+m_cv_temp <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year)+smooth(temp),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_temp$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(22)
+plan(multisession, workers = 8)
+m_cv_temp_bathy <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year)+smooth(temp)+smooth(bathy),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_temp_bathy$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+m_cv_none$sum_loglik # total log-likelihood
+m_cv_bathy$sum_loglik # total log-likelihood
+m_cv_temp$sum_loglik # total log-likelihood
+m_cv_temp_bathy$sum_loglik # total log-likelihood
+
+
+### cross validation with spatial cluster ###
+
+#cluster by time and space 
+k <- 8
+clust_2021 <- kmeans(data_estimate %>% filter(year==2021)%>%select(X,Y), k)$cluster
+clust_2022 <- kmeans(data_estimate %>% filter(year==2022)%>%select(X,Y), k)$cluster
+clust_2023 <- kmeans(data_estimate %>% filter(year==2023)%>%select(X,Y), k)$cluster
+clust_2025 <- kmeans(data_estimate %>% filter(year==2025)%>%select(X,Y), k)$cluster
+clust <- c(clust_2021,clust_2022+k,clust_2023+(k*2),clust_2025+(k*3))
+data_estimate$clust <- clust
+
+
+set.seed(11)
+plan(multisession, workers = 8)
+s_cv_none <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_none$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(11)
+plan(multisession, workers = 8)
+s_cv_bathy <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year)+smooth(bathy),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_bathy$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(11)
+plan(multisession, workers = 8)
+s_cv_temp <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year)+smooth(temp),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_temp$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(11)
+plan(multisession, workers = 8)
+s_cv_temp_bathy <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year)+smooth(temp)+smooth(bathy),
+  data = data_estimate,
+  mesh = mesh,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_temp_bathy$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+s_cv_none$sum_loglik # total log-likelihood
+s_cv_bathy$sum_loglik # total log-likelihood
+s_cv_temp$sum_loglik # total log-likelihood
+s_cv_temp_bathy$sum_loglik # total log-likelihood
+
+#Cross-validation is one of the best approaches that can be used to quantify model performance
+#it seems that the model with best performance is without covariates
+
+## show prediction ####
+### compare the total index of biomass ###
+index_comparison <- data.frame()
+for (name in c("fit_gamma_regular_1","fit_gamma_data_fit_1",
+               "fit_gamma_regular_1.852","fit_gamma_data_fit_1.852")){
+  prediction <- predict(list_fit[[name]], newdata = grid_proj %>%
+                          select(X,Y,year,time) %>%
+                          filter(time!=2024),
+                        return_tmb_object = TRUE,se_fit = TRUE)
+  
+  index <- get_index(prediction, area = 0.25, bias_correct = TRUE)
+  index$model <- name
+  
+  index_comparison <- rbind(index_comparison,index)
+}
+rm(prediction,index)
+
+index_time <- c(0,0,0,0,0.1,0.1,0.1,0.1,0.2,0.2,0.2,0.2,0.3,0.3,0.3,0.3)
+index_comparison$time <- index_comparison$time + index_time
+
+ggplot(index_comparison,aes(x = time, y = est, colour = model))+
+  geom_point(show.legend = T)+
+  geom_errorbar(aes( ymin = lwr, ymax = upr), width = 0.2,show.legend = F)+
+  labs(x = "", y = "Biomass (tonnes)", title = "Biomass from survey")+
+  theme_bw()
+
+### Map the prediction from the chosen model ###
+# take the adapted column from the grid in prediction
+predictions_gamma_data_fit <- predict(list_fit[[6]], newdata = grid_proj %>%
+                                        select(X,Y,year,time) %>%
+                                        filter(time!=2024),
+                                      return_tmb_object = TRUE,se_fit = TRUE)
+
+#Let’s make a small function to make maps
+plot_map <- function(dat, column) {
+  ggplot(dat, aes(X, Y, fill = {{ column }})) +
+    geom_raster() +
+    facet_wrap(~year, nrow = 1) +
+    coord_fixed()+
+    theme(aspect.ratio = 3)
+}
+
+### show prediction density ###
+plot_map(predictions_gamma_data_fit$data, exp(est)) +
+  scale_fill_viridis_c(trans = "sqrt")+
+  ggtitle("Prediction (fixed effects + all random effects)")
+
+### show spatial random effects ###
+plot_map(predictions_gamma_data_fit$data, omega_s) +
+  ggtitle("Spatial random effects only") +
+  scale_fill_gradient2()
+
+### show spatiotemporal random effects ###
+plot_map(predictions_gamma_data_fit$data, epsilon_st) +
+  ggtitle("Spatiotemporal random effects only") +
+  scale_fill_gradient2()
+
+### plot the density as sequential data ###
+cut_min <- trunc(predictions_gamma_data_fit$data$est)
+#cut_min <- trunc(predictions_gamma_data_fit$data$est)
+cut_max <- cut_min+1
+cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
+
+for (i in 1:length(cuts)){
+  if (cuts[i]=="(8-9]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(9-10]"){
+    cuts[i] <- ">8"
+  }
+  if (cuts[i]=="(10-11]"){
+    cuts[i] <- ">8"
+  }
+}
+
+predictions_gamma_data_fit$data$cuts <- as.factor(cuts)
+
+ggplot(predictions_gamma_data_fit$data, aes(X, Y, fill = cuts)) +
+  geom_raster() +
+  scale_fill_brewer("log(density)", type = "seq", palette = "YlOrRd")+
+  facet_wrap(~year, nrow = 1) +
+  coord_fixed()+
+  theme(aspect.ratio = 3)+
+  ggtitle("Prediction (fixed effects + all random effects)")
