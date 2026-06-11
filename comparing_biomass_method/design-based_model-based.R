@@ -358,9 +358,9 @@ ggplot(compare_biomass,aes(x = date, y = biomass,colour = methods))+
   labs(x = "", y = "Biomass (tonnes)", title = "Biomass from survey")+
   theme_bw()
 
-saveRDS(compare_biomass,paste(
-  here(),"/comparing_biomass_method/Data/compare_biomass_estimation.rds",sep=""
-))
+#saveRDS(compare_biomass,paste(
+#  here(),"/comparing_biomass_method/Data/compare_biomass_estimation.rds",sep=""
+#))
 
 
 ggplot(map_predict, aes(X, Y, fill = est)) +
@@ -413,6 +413,7 @@ ggplot(map_predict, aes(X, Y, fill = est_se/est)) +
                        high = muted("red")) +
   facet_wrap(~date,nrow=1)+
   coord_fixed(expand = FALSE)+
+  labs(fill = "CV")+
   theme(aspect.ratio = 3)
 
 ###-###-###-###-###-###
