@@ -121,6 +121,7 @@ for (cut in cutoff){
   list_mesh_data_fit[[paste("mesh_data_fit_",cut,sep="")]] <- make_mesh(
     data_estimate,c("X", "Y"), mesh = mesh_inla)
 }
+rm(mesh_data_fit,mesh_inla,mesh_regular)
 
 for (i in 1:length(cutoff)){
   plot(list_mesh_regular[[i]]$mesh, main = NA, edge.color = "grey60", asp = 1)
@@ -316,8 +317,11 @@ ggplot(data = summary_moran, aes(x = as.factor(year), y = as.factor(mesh),
 
 # It seems that the gamma models capt better the residual spatial autocorrelation
 
+
+
 ### Observed vs predicted ###
 list_ggscatter <- list()
+R_vect <- c()
 for (i in 1:16){
   predicted <- exp(predict(list_fit[[i]])$est)
   observed <- list_fit[[i]]$data$density.t_km2
@@ -327,6 +331,8 @@ for (i in 1:16){
             add = "reg.line", title = names(list_fit)[i]) +
     stat_cor(label.x = 1000, label.y = 3000) +
     stat_regline_equation(label.x = 2000, label.y = 6.5)
+  
+  R_vect <- c(R_vect, as.numeric(cor.test(predicted,observed)$estimate))
 }
 
 plot_grid(
@@ -348,8 +354,58 @@ plot_grid(
   list_ggscatter[[16]]
 )
 
+### big ggplot that summarize Moran and R² results ###
+AFH_theme <-  theme(panel.background = element_rect(fill = '#dddddd', 
+                                                    color = '#dddddd',
+                                                    linewidth = 1),
+                     panel.grid.major = element_line(color = '#00000000', 
+                                                     linetype = 'dotted'),
+                     panel.grid.minor = element_line(color = '#00000000', 
+                                                     linewidth = 2),
+                     plot.background = element_rect(fill = "#b4c7dc"),
+                     legend.background = element_rect(fill = "#b4c7dc"),
+                    strip.background = element_rect(fill ="#dddddd"))
+
+# add a column configuration with mesh type x cutoff
+summary_moran <- summary_moran %>%
+  mutate(config = paste(mesh,"_cutoff: ",cutoff,sep="")) %>%
+  mutate(year = as.factor(year)) %>%
+  mutate(config = as.factor(config))
+
+ggplot(summary_moran, aes(year, config, fill = percent_ns)) +
+  geom_tile(color = "#00000000")+
+  geom_text(aes(label = percent_ns))+
+  scale_fill_distiller(palette = "RdYlBu")+
+  facet_wrap(~ model, nrow = 1) +
+  AFH_theme+
+  labs(y = "Mesh configurations",
+       x = "Year",
+       fill = "% significant Moran's index")
+
+# data.frame for the coefficient correlation
+R.coef_data <- data.frame(
+  model = names(list_fit),
+  R.coef = R_vect
+)
+R.coef_data <- R.coef_data %>%
+  mutate(distrib = ifelse(grepl("gamma", model),"Gamma","Lognormal")) %>%
+  mutate(mesh = ifelse(grepl("regular", model),"Regular","Data-fit")) %>%
+  mutate(cutoff = as.factor(c(1,1,1,1,1.852,1.852,1.852,1.852,3,3,3,3,5,5,5,5)))
+R.coef_data$cutoff <- ordered(R.coef_data$cutoff,c(5,3,1.852,1))
+R.coef_data$mesh <- ordered(R.coef_data$mesh,c("Regular","Data-fit"))
+
+ggplot(R.coef_data %>% filter(distrib=="Gamma"), 
+       aes(mesh, cutoff, fill = R.coef)) +
+  geom_tile(color = "#00000000")+
+  geom_text(aes(label = round(R.coef,digits = 2)*100))+
+  scale_fill_distiller(palette = "RdYlBu", direction = 1)+
+  facet_wrap(~distrib, ncol=4, labeller = labeller(distrib = label_value))+
+  AFH_theme+
+  labs(y = "Mesh cutoff",
+       x = "Mesh type")
+
 ## cross validation ####
-# the previous result enable to choose the gamma models with 1 or 1.852 cutoff
+# the previous result enable to choose the gamma models with 1, 1.852, 3 cutoff
 
 ### cross validation random ###
 n_folds = 20
@@ -385,7 +441,7 @@ m_cv_gamma_data_fit_1 <- sdmTMB_cv(
   k_folds = n_folds
 )
 for (i in 1:n_folds){
-  model <- m_cv_gamma_regular_1$models[[i]]
+  model <- m_cv_gamma_data_fit_1$models[[i]]
   print(paste("Check model ",i,sep=""))
   sanity(model)
 }
@@ -403,7 +459,7 @@ m_cv_gamma_regular_1.852 <- sdmTMB_cv(
   k_folds = n_folds
 )
 for (i in 1:n_folds){
-  model <- m_cv_gamma_regular_1$models[[i]]
+  model <- m_cv_gamma_regular_1.852$models[[i]]
   print(paste("Check model ",i,sep=""))
   sanity(model)
 }
@@ -421,7 +477,25 @@ m_cv_gamma_data_fit_1.852 <- sdmTMB_cv(
   k_folds = n_folds
 )
 for (i in 1:n_folds){
-  model <- m_cv_gamma_regular_1$models[[i]]
+  model <- m_cv_gamma_data_fit_1.852$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
+set.seed(44)
+plan(multisession, workers = 8)
+m_cv_gamma_regular_3 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),
+  data = data_estimate,
+  mesh = list_mesh_regular$mesh_regular_3,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  k_folds = n_folds
+)
+for (i in 1:n_folds){
+  model <- m_cv_gamma_regular_3$models[[i]]
   print(paste("Check model ",i,sep=""))
   sanity(model)
 }
@@ -430,7 +504,7 @@ m_cv_gamma_regular_1$sum_loglik # total log-likelihood
 m_cv_gamma_data_fit_1$sum_loglik # total log-likelihood
 m_cv_gamma_regular_1.852$sum_loglik # total log-likelihood
 m_cv_gamma_data_fit_1.852$sum_loglik # total log-likelihood
-
+m_cv_gamma_regular_3$sum_loglik # total log-likelihood
 
 ### cross validation with spatial cluster ###
 
@@ -516,34 +590,84 @@ for (i in 1:max(unique(clust))){
   sanity(model)
 }
 
+set.seed(13)
+plan(multisession, workers = 8)
+s_cv_gamma_regular_3 <- sdmTMB_cv(
+  density.t_km2 ~ 1+as.factor(year),
+  data = data_estimate,
+  mesh = list_mesh_regular$mesh_regular_3,
+  family = Gamma(link = "log"),
+  spatial = "on",
+  time = "time",
+  spatiotemporal = "IID",
+  fold_ids = "clust"
+)
+for (i in 1:max(unique(clust))){
+  model <- s_cv_gamma_regular_3$models[[i]]
+  print(paste("Check model ",i,sep=""))
+  sanity(model)
+}
+
 s_cv_gamma_regular_1$sum_loglik # total log-likelihood
 s_cv_gamma_data_fit_1$sum_loglik # total log-likelihood
 s_cv_gamma_regular_1.852$sum_loglik # total log-likelihood
 s_cv_gamma_data_fit_1.852$sum_loglik # total log-likelihood
+s_cv_gamma_regular_3$sum_loglik # total log-likelihood
 
 # all the model from the CV had converge
 # we stack the sum_loglik in a dataframe
 cv_sum_loglik <- data.frame(
   model = rep(c("gamma_regular_1","gamma_data_fit_1",
-                "gamma_regular_1.852","gamma_data_fit_1.852"),2),
-  CV_type = c(rep("random",4),rep("spatial_cluster",4)),
+                "gamma_regular_1.852","gamma_data_fit_1.852",
+                "gamma_regular_3"),2),
+  CV_type = c(rep("Random",5),rep("Spatial_cluster",5)),
   sum_loglik = c(
     m_cv_gamma_regular_1$sum_loglik,
     m_cv_gamma_data_fit_1$sum_loglik, 
     m_cv_gamma_regular_1.852$sum_loglik, 
-    m_cv_gamma_data_fit_1.852$sum_loglik, 
+    m_cv_gamma_data_fit_1.852$sum_loglik,
+    m_cv_gamma_regular_3$sum_loglik,
     s_cv_gamma_regular_1$sum_loglik, 
     s_cv_gamma_data_fit_1$sum_loglik, 
     s_cv_gamma_regular_1.852$sum_loglik, 
-    s_cv_gamma_data_fit_1.852$sum_loglik 
+    s_cv_gamma_data_fit_1.852$sum_loglik,
+    s_cv_gamma_regular_3$sum_loglik
   )
 )
+cv_sum_loglik <- cv_sum_loglik %>%
+  mutate(distrib = ifelse(grepl("gamma", model),"Gamma","Lognormal")) %>%
+  mutate(mesh = ifelse(grepl("regular", model),"Regular","Data-fit")) %>%
+  mutate(cutoff = as.factor(rep(c(1,1,1.852,1.852,3),2)))
+cv_sum_loglik$cutoff <- ordered(cv_sum_loglik$cutoff,c(3,1.852,1))
+cv_sum_loglik$mesh <- ordered(cv_sum_loglik$mesh,c("Regular","Data-fit"))
+
+
+ggplot(cv_sum_loglik %>% filter(CV_type=="Random"),
+       aes(mesh, cutoff, fill = sum_loglik)) +
+  geom_tile(color = "#00000000")+
+  geom_text(aes(label = round(sum_loglik,digits = 0)))+
+  scale_fill_distiller(palette = "RdYlBu", direction = 1)+
+  facet_wrap(~CV_type, ncol=4, labeller = labeller(CV_type = label_both))+
+  AFH_theme+
+  labs(y = "Mesh cutoff",
+       x = "Mesh type")
+
+ggplot(cv_sum_loglik%>% filter(CV_type=="Spatial_cluster"),
+       aes(mesh, cutoff, fill = sum_loglik)) +
+  geom_tile(color = "#00000000")+
+  geom_text(aes(label = round(sum_loglik,digits = 0)))+
+  scale_fill_distiller(palette = "RdYlBu", direction = 1)+
+  facet_wrap(~CV_type, ncol=4, labeller = labeller(CV_type = label_both))+
+  AFH_theme+
+  labs(y = "Mesh cutoff",
+       x = "Mesh type")
 
 ## show prediction ####
 ### compare the total index of biomass ###
 index_comparison <- data.frame()
 for (name in c("fit_gamma_regular_1","fit_gamma_data_fit_1",
-               "fit_gamma_regular_1.852","fit_gamma_data_fit_1.852")){
+               "fit_gamma_regular_1.852","fit_gamma_data_fit_1.852",
+               "fit_gamma_regular_3")){
   prediction <- predict(list_fit[[name]], newdata = grid_proj %>%
                           select(X,Y,year,time) %>%
                           filter(time!=2024),
@@ -556,18 +680,33 @@ for (name in c("fit_gamma_regular_1","fit_gamma_data_fit_1",
 }
 rm(prediction,index)
 
-index_time <- c(0,0,0,0,0.1,0.1,0.1,0.1,0.2,0.2,0.2,0.2,0.3,0.3,0.3,0.3)
+index_time <- c(0,0,0,0,0.1,0.1,0.1,0.1,0.2,0.2,0.2,0.2,
+                0.3,0.3,0.3,0.3,0.4,0.4,0.4,0.4)
 index_comparison$time <- index_comparison$time + index_time
+index_comparison$model <- ordered(index_comparison$model,
+                                  unique(index_comparison$model))
 
 ggplot(index_comparison,aes(x = time, y = est, colour = model))+
   geom_point(show.legend = T)+
+  scale_color_manual(values = as.character(
+    c("#B15928","#6A3D9A","#DC902A","#C2090a","#158466"))
+    )+
   geom_errorbar(aes( ymin = lwr, ymax = upr), width = 0.2,show.legend = F)+
-  labs(x = "", y = "Biomass (tonnes)", title = "Biomass from survey")+
-  theme_bw()
+  labs(x = "", y = "Biomass (tonnes)",
+       title = "Biomass from survey", colour = "Model")+
+  theme(plot.background = element_rect(fill = "#b4c7dc"),
+        legend.background = element_rect(fill = "#b4c7dc"),
+        panel.background = element_rect(fill = '#eeeeee', 
+                                        color = '#000000',
+                                        linewidth = 0.5),
+        panel.grid.major = element_line(color = '#000000', 
+                                        linetype = 'dotted'),
+        panel.grid.minor = element_line(color = '#00000000', 
+                                        linetype = 'dotted'))
 
 ### Map the prediction from the chosen model ###
 # take the adapted column from the grid in prediction
-predictions_gamma_data_fit <- predict(list_fit[[6]], newdata = grid_proj %>%
+predictions_gamma_regular <- predict(list_fit[[9]], newdata = grid_proj %>%
                                        select(X,Y,year,time) %>%
                                        filter(time!=2024),
                                      return_tmb_object = TRUE,se_fit = TRUE)
@@ -582,22 +721,22 @@ plot_map <- function(dat, column) {
 }
 
 ### show prediction density ###
-plot_map(predictions_gamma_data_fit$data, exp(est)) +
+plot_map(predictions_gamma_regular$data, exp(est)) +
   scale_fill_viridis_c(trans = "sqrt")+
   ggtitle("Prediction (fixed effects + all random effects)")
 
 ### show spatial random effects ###
-plot_map(predictions_gamma_data_fit$data, omega_s) +
+plot_map(predictions_gamma_regular$data, omega_s) +
   ggtitle("Spatial random effects only") +
   scale_fill_gradient2()
 
 ### show spatiotemporal random effects ###
-plot_map(predictions_gamma_data_fit$data, epsilon_st) +
+plot_map(predictions_gamma_regular$data, epsilon_st) +
   ggtitle("Spatiotemporal random effects only") +
   scale_fill_gradient2()
 
 ### plot the density as sequential data ###
-cut_min <- trunc(predictions_gamma_data_fit$data$est)
+cut_min <- trunc(predictions_gamma_regular$data$est)
 #cut_min <- trunc(predictions_gamma_data_fit$data$est)
 cut_max <- cut_min+1
 cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
@@ -614,9 +753,9 @@ for (i in 1:length(cuts)){
   }
 }
 
-predictions_gamma_data_fit$data$cuts <- as.factor(cuts)
+predictions_gamma_regular$data$cuts <- as.factor(cuts)
 
-ggplot(predictions_gamma_data_fit$data, aes(X, Y, fill = cuts)) +
+ggplot(predictions_gamma_regular$data, aes(X, Y, fill = cuts)) +
   geom_raster() +
   scale_fill_brewer("log(density)", type = "seq", palette = "YlOrRd")+
   facet_wrap(~year, nrow = 1) +
@@ -651,11 +790,11 @@ bnd2 = INLA::inla.nonconvex.hull(cbind(grid_proj$X, grid_proj$Y),
                                    convex = -0.15)
   
 mesh_inla <- INLA::inla.mesh.2d(
-    loc = as.matrix(data_estimate[,c("X","Y")]),
+    loc = as.matrix(as.data.frame(grid_bathy)[,c(1,2)]),
     boundary = list(bnd,bnd2),
-    cutoff = 1.852, # minimum triangle edge length
-    max.edge = c(3*1.852, 20*1.852), # inner and outer max triangle lengths
-  ) # 1.852 is the distance in meter of a mile nautic
+    cutoff = 3, # minimum triangle edge length
+    max.edge = c(3*3, 20*3), # inner and outer max triangle lengths
+  ) # 3 is the distance chosen from the previous analysis
   
 mesh <- make_mesh(data_estimate,c("X", "Y"), mesh = mesh_inla)
 
@@ -749,27 +888,38 @@ predicted_bathy <- exp(predict(fit_bathy)$est)
 predicted_temp <- exp(predict(fit_temp)$est)
 predicted_temp_bathy <- exp(predict(fit_temp_bathy)$est)
 
+AFH_theme <-  theme(panel.background = element_rect(fill = '#b4c7dc', 
+                                                    color = '#b4c7dc',
+                                                    linewidth = 1),
+                    panel.grid.major = element_line(color = '#00000000', 
+                                                    linetype = 'dotted'),
+                    panel.grid.minor = element_line(color = '#00000000', 
+                                                    linewidth = 2),
+                    plot.background = element_rect(fill = "#b4c7dc"),
+                    legend.background = element_rect(fill = "#b4c7dc"),
+                    strip.background = element_rect(fill ="#dddddd"))
+
 plot_grid(
   ggscatter(
     data.frame(observed,predicted_none),x = "observed", y = "predicted_none",
     add = "reg.line", title = "No covariates") +
-    stat_cor(label.x = 1000, label.y = 3000) +
-    stat_regline_equation(label.x = 2000, label.y = 6.5),
+    stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
+    AFH_theme,
   ggscatter(
     data.frame(observed,predicted_bathy),x = "observed", y = "predicted_bathy",
     add = "reg.line", title = "Bathymetry") +
-    stat_cor(label.x = 1000, label.y = 3000) +
-    stat_regline_equation(label.x = 2000, label.y = 6.5),
+    stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
+    AFH_theme,
   ggscatter(
     data.frame(observed,predicted_temp),x = "observed", y = "predicted_temp",
     add = "reg.line", title = "Bottom temperature") +
-    stat_cor(label.x = 1000, label.y = 3000) +
-    stat_regline_equation(label.x = 2000, label.y = 6.5),
+    stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
+    AFH_theme,
   ggscatter(
     data.frame(observed,predicted_temp_bathy),x = "observed", y = "predicted_temp_bathy",
     add = "reg.line", title = "Bathymetry and Bottom temperature") +
-    stat_cor(label.x = 1000, label.y = 3000) +
-    stat_regline_equation(label.x = 2000, label.y = 6.5)
+    stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
+    AFH_theme
 )
 
 ## cross validation ####
@@ -948,38 +1098,81 @@ s_cv_temp_bathy$sum_loglik # total log-likelihood
 #Cross-validation is one of the best approaches that can be used to quantify model performance
 #it seems that the model with best performance is without covariates
 
+### check deviance and covariates effect ###
+#deviance
+1-deviance(fit_bathy)/deviance(fit_none)
+1-deviance(fit_temp)/deviance(fit_none)
+1-deviance(fit_temp_bathy)/deviance(fit_none)
+
+# This version is in link space and the residuals are partial 
+#randomized quantile residuals.
+visreg::visreg(fit_bathy, "bathy")
+visreg::visreg(fit_temp, "temp")
+visreg::visreg(fit_temp_bathy, "bathy")
+visreg::visreg(fit_temp_bathy, "temp")
+
 ## show prediction ####
 ### compare the total index of biomass ###
-index_comparison <- data.frame()
-for (name in c("fit_gamma_regular_1","fit_gamma_data_fit_1",
-               "fit_gamma_regular_1.852","fit_gamma_data_fit_1.852")){
-  prediction <- predict(list_fit[[name]], newdata = grid_proj %>%
-                          select(X,Y,year,time) %>%
-                          filter(time!=2024),
-                        return_tmb_object = TRUE,se_fit = TRUE)
-  
-  index <- get_index(prediction, area = 0.25, bias_correct = TRUE)
-  index$model <- name
-  
-  index_comparison <- rbind(index_comparison,index)
-}
-rm(prediction,index)
+predicted_none <- predict(fit_none, newdata = grid_proj %>%
+                            select(X,Y,year,time) %>%
+                            filter(time!=2024),
+                          return_tmb_object = TRUE,se_fit = TRUE)
+predicted_bathy <- predict(fit_bathy, newdata = grid_proj %>%
+                             select(X,Y,year,time,bathy) %>%
+                             filter(time!=2024),
+                           return_tmb_object = TRUE,se_fit = TRUE)
+predicted_temp <- predict(fit_temp, newdata = grid_proj %>%
+                            mutate(temp = bottomT) %>%
+                            select(X,Y,year,time,temp) %>%
+                            filter(time!=2024),
+                          return_tmb_object = TRUE,se_fit = TRUE)
+predicted_temp_bathy <- predict(fit_temp_bathy, newdata = grid_proj %>%
+                                  mutate(temp = bottomT) %>%
+                                  select(X,Y,year,time,temp,bathy) %>%
+                                  filter(time!=2024),
+                                return_tmb_object = TRUE,se_fit = TRUE)
+index_comparison <- rbind(
+  get_index(predicted_none, area = 0.25, bias_correct = TRUE),
+  get_index(predicted_bathy, area = 0.25, bias_correct = TRUE),
+  get_index(predicted_temp, area = 0.25, bias_correct = TRUE),
+  get_index(predicted_temp_bathy, area = 0.25, bias_correct = TRUE)
+)
+
+index_comparison$model <- c(
+  rep("fit_none",4),
+  rep("fit_bathy",4),
+  rep("fit_temp",4),
+  rep("fit_temp_bathy",4)
+)
 
 index_time <- c(0,0,0,0,0.1,0.1,0.1,0.1,0.2,0.2,0.2,0.2,0.3,0.3,0.3,0.3)
 index_comparison$time <- index_comparison$time + index_time
 
+index_comparison$model <- ordered(index_comparison$model, c("fit_none",
+                                                            "fit_bathy",
+                                                            "fit_temp",
+                                                            "fit_temp_bathy"))
+
 ggplot(index_comparison,aes(x = time, y = est, colour = model))+
   geom_point(show.legend = T)+
+  scale_color_manual(values = as.character(
+    c("#158466","#B15928","#6A3D9A","#DC902A"))
+  )+
   geom_errorbar(aes( ymin = lwr, ymax = upr), width = 0.2,show.legend = F)+
   labs(x = "", y = "Biomass (tonnes)", title = "Biomass from survey")+
-  theme_bw()
+  theme(panel.background = element_rect(fill = '#eeeeee', 
+                                                      color = '#000000',
+                                                      linewidth = 0.5),
+                      panel.grid.major = element_line(color = '#000000', 
+                                                      linetype = 'dotted'),
+                      panel.grid.minor = element_line(color = '#00000000', 
+                                                      linetype = 'dotted'),
+                      plot.background = element_rect(fill = "#b4c7dc"),
+                      legend.background = element_rect(fill = "#b4c7dc"),
+                      strip.background = element_rect(fill ="#dddddd"))
 
 ### Map the prediction from the chosen model ###
 # take the adapted column from the grid in prediction
-predictions_gamma_data_fit <- predict(list_fit[[6]], newdata = grid_proj %>%
-                                        select(X,Y,year,time) %>%
-                                        filter(time!=2024),
-                                      return_tmb_object = TRUE,se_fit = TRUE)
 
 #Let’s make a small function to make maps
 plot_map <- function(dat, column) {
@@ -991,22 +1184,22 @@ plot_map <- function(dat, column) {
 }
 
 ### show prediction density ###
-plot_map(predictions_gamma_data_fit$data, exp(est)) +
+plot_map(predicted_none$data, exp(est)) +
   scale_fill_viridis_c(trans = "sqrt")+
   ggtitle("Prediction (fixed effects + all random effects)")
 
 ### show spatial random effects ###
-plot_map(predictions_gamma_data_fit$data, omega_s) +
+plot_map(predicted_none$data, omega_s) +
   ggtitle("Spatial random effects only") +
   scale_fill_gradient2()
 
 ### show spatiotemporal random effects ###
-plot_map(predictions_gamma_data_fit$data, epsilon_st) +
+plot_map(predicted_none$data, epsilon_st) +
   ggtitle("Spatiotemporal random effects only") +
   scale_fill_gradient2()
 
 ### plot the density as sequential data ###
-cut_min <- trunc(predictions_gamma_data_fit$data$est)
+cut_min <- trunc(predicted_none$data$est)
 #cut_min <- trunc(predictions_gamma_data_fit$data$est)
 cut_max <- cut_min+1
 cuts <- paste(c("("), cut_min, c("-"), cut_max, c("]"), sep = "")
@@ -1023,12 +1216,24 @@ for (i in 1:length(cuts)){
   }
 }
 
-predictions_gamma_data_fit$data$cuts <- as.factor(cuts)
+predicted_none$data$cuts <- as.factor(cuts)
 
-ggplot(predictions_gamma_data_fit$data, aes(X, Y, fill = cuts)) +
+ggplot(predicted_none$data, aes(X, Y, fill = cuts)) +
   geom_raster() +
   scale_fill_brewer("log(density)", type = "seq", palette = "YlOrRd")+
   facet_wrap(~year, nrow = 1) +
   coord_fixed()+
-  theme(aspect.ratio = 3)+
-  ggtitle("Prediction (fixed effects + all random effects)")
+  scale_x_continuous(breaks = seq(555, 568, by = 5))+
+  theme(aspect.ratio = 3,
+        panel.background = element_rect(fill = '#eeeeee', 
+                                        color = '#000000',
+                                        linewidth = 0.5),
+        panel.grid.major = element_line(color = '#000000', 
+                                        linetype = 'dotted'),
+        panel.grid.minor = element_line(color = '#00000000', 
+                                        linetype = 'dotted'),
+        plot.background = element_rect(fill = "#b4c7dc"),
+        legend.background = element_rect(fill = "#b4c7dc"),
+        strip.background = element_rect(fill ="#dddddd"))+
+  ggtitle("Prediction (fixed and random effects) from the model without covariates")
+
