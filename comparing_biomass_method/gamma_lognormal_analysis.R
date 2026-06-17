@@ -362,8 +362,8 @@ AFH_theme <-  theme(panel.background = element_rect(fill = '#dddddd',
                                                      linetype = 'dotted'),
                      panel.grid.minor = element_line(color = '#00000000', 
                                                      linewidth = 2),
-                     plot.background = element_rect(fill = "#b4c7dc"),
-                     legend.background = element_rect(fill = "#b4c7dc"),
+                     plot.background = element_rect(fill = "#dee6ef"),
+                     legend.background = element_rect(fill = "#dee6ef"),
                     strip.background = element_rect(fill ="#dddddd"))
 
 # add a column configuration with mesh type x cutoff
@@ -693,9 +693,9 @@ ggplot(index_comparison,aes(x = time, y = est, colour = model))+
     )+
   geom_errorbar(aes( ymin = lwr, ymax = upr), width = 0.2,show.legend = F)+
   labs(x = "", y = "Biomass (tonnes)",
-       title = "Biomass from survey", colour = "Model")+
-  theme(plot.background = element_rect(fill = "#b4c7dc"),
-        legend.background = element_rect(fill = "#b4c7dc"),
+       title = "Estimation of the exploitable biomass", colour = "Model")+
+  theme(plot.background = element_rect(fill = "#dee6ef"),
+        legend.background = element_rect(fill = "#dee6ef"),
         panel.background = element_rect(fill = '#eeeeee', 
                                         color = '#000000',
                                         linewidth = 0.5),
@@ -888,15 +888,15 @@ predicted_bathy <- exp(predict(fit_bathy)$est)
 predicted_temp <- exp(predict(fit_temp)$est)
 predicted_temp_bathy <- exp(predict(fit_temp_bathy)$est)
 
-AFH_theme <-  theme(panel.background = element_rect(fill = '#b4c7dc', 
-                                                    color = '#b4c7dc',
+AFH_theme <-  theme(panel.background = element_rect(fill = '#dee6ef', 
+                                                    color = '#dee6ef',
                                                     linewidth = 1),
                     panel.grid.major = element_line(color = '#00000000', 
                                                     linetype = 'dotted'),
                     panel.grid.minor = element_line(color = '#00000000', 
                                                     linewidth = 2),
-                    plot.background = element_rect(fill = "#b4c7dc"),
-                    legend.background = element_rect(fill = "#b4c7dc"),
+                    plot.background = element_rect(fill = "#dee6ef"),
+                    legend.background = element_rect(fill = "#dee6ef"),
                     strip.background = element_rect(fill ="#dddddd"))
 
 plot_grid(
@@ -1167,8 +1167,8 @@ ggplot(index_comparison,aes(x = time, y = est, colour = model))+
                                                       linetype = 'dotted'),
                       panel.grid.minor = element_line(color = '#00000000', 
                                                       linetype = 'dotted'),
-                      plot.background = element_rect(fill = "#b4c7dc"),
-                      legend.background = element_rect(fill = "#b4c7dc"),
+                      plot.background = element_rect(fill = "#dee6ef"),
+                      legend.background = element_rect(fill = "#dee6ef"),
                       strip.background = element_rect(fill ="#dddddd"))
 
 ### Map the prediction from the chosen model ###
@@ -1232,8 +1232,8 @@ ggplot(predicted_none$data, aes(X, Y, fill = cuts)) +
                                         linetype = 'dotted'),
         panel.grid.minor = element_line(color = '#00000000', 
                                         linetype = 'dotted'),
-        plot.background = element_rect(fill = "#b4c7dc"),
-        legend.background = element_rect(fill = "#b4c7dc"),
+        plot.background = element_rect(fill = "#dee6ef"),
+        legend.background = element_rect(fill = "#dee6ef"),
         strip.background = element_rect(fill ="#dddddd"))+
   ggtitle("Predictions (fixed and random effects) from the model without covariates")
 
