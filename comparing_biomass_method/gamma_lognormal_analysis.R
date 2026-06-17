@@ -1235,5 +1235,5 @@ ggplot(predicted_none$data, aes(X, Y, fill = cuts)) +
         plot.background = element_rect(fill = "#b4c7dc"),
         legend.background = element_rect(fill = "#b4c7dc"),
         strip.background = element_rect(fill ="#dddddd"))+
-  ggtitle("Prediction (fixed and random effects) from the model without covariates")
+  ggtitle("Predictions (fixed and random effects) from the model without covariates")
 
