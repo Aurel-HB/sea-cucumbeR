@@ -366,6 +366,7 @@ AFH_theme <-  theme(panel.background = element_rect(fill = '#dddddd',
                      legend.background = element_rect(fill = "#dee6ef"),
                     strip.background = element_rect(fill ="#dddddd"))
 
+
 # add a column configuration with mesh type x cutoff
 summary_moran <- summary_moran %>%
   mutate(config = paste(mesh,"_cutoff: ",cutoff,sep="")) %>%
@@ -377,7 +378,7 @@ ggplot(summary_moran, aes(year, config, fill = percent_ns)) +
   geom_text(aes(label = percent_ns))+
   scale_fill_distiller(palette = "RdYlBu")+
   facet_wrap(~ model, nrow = 1) +
-  AFH_theme+
+  theme()+
   labs(y = "Mesh configurations",
        x = "Year",
        fill = "% significant Moran's index")
@@ -694,6 +695,7 @@ ggplot(index_comparison,aes(x = time, y = est, colour = model))+
   geom_errorbar(aes( ymin = lwr, ymax = upr), width = 0.2,show.legend = F)+
   labs(x = "", y = "Biomass (tonnes)",
        title = "Estimation of the exploitable biomass", colour = "Model")+
+  #theme_bw()
   theme(plot.background = element_rect(fill = "#dee6ef"),
         legend.background = element_rect(fill = "#dee6ef"),
         panel.background = element_rect(fill = '#eeeeee', 

@@ -101,7 +101,7 @@ check_warnings <- function(expr) {
     }
   )
   list(result = result, warnings = warnings_list)
-}
+} # check with is.empty()
 
 # inference statistic test ####
 #Poisson model ####
@@ -338,6 +338,9 @@ abline(0,1)
 lines(q_mean, q_lo, lty=2, col="red")
 lines(q_mean, q_hi, lty=2, col="red")
 
+as.numeric(cor.test(q_mean,v_obs)$estimate)
+as.numeric(lm(q_mean~v_obs)$coefficients["v_obs"])
+
 ## extract point process to use it on a another surface ####
 plgcp <- rLGCP("matern", fitox0$lambda, var = fitox0$clustpar[1],
                scale = fitox0$clustpar[2], nu=fitox0$covmodel$margs$nu,
@@ -477,6 +480,9 @@ plot(q_mean, v_obs,
 abline(0,1)
 lines(q_mean, q_lo, lty=2, col="red")
 lines(q_mean, q_hi, lty=2, col="red")
+
+as.numeric(cor.test(q_mean,v_obs)$estimate)
+as.numeric(lm(q_mean~v_obs)$coefficients["v_obs"])
 
 ### ### ### ###
 # Validation by scoring rules ####

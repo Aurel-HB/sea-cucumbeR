@@ -88,3 +88,45 @@ fit1 <- lppm(X~y)
 anova(fit0, fit1, test="LR")
 summary(fit1)
 
+# test with linnet.spatstat and claude IA ####
+library(spatstat.linnet)
+W <- Window(PPP)
+
+# two endpoints of the transect, running along the long (y) axis
+verts <- ppp(x = c(0.75, 0.75), y = W$yrange, window = W)
+edg   <- matrix(c(1, 2), ncol = 2)
+L     <- linnet(verts, edges = edg)
+#Convert your point pattern onto the network
+X <- lpp(PPP, L)
+plot(L, main = "network"); plot(X, add = TRUE, pch = 16)
+
+proj <- as.ppp(X)              # snapped coordinates
+orig <- PPP
+offsets <- sqrt((coords(proj)$x - coords(orig)$x)^2 + (coords(proj)$y - coords(orig)$y)^2)
+summary(offsets)
+#Explore intensity along the network
+# kernel-smoothed intensity along the network (the network analogue of Smooth/density.ppp)
+dens <- density.lpp(X, sigma = bw.scott.iso(X))   # or pick sigma another way
+plot(dens, main = "smoothed intensity along transect")
+# network K-function — now meaningful over the FULL 836 m extent, not capped at 0.375 m
+Knet <- linearK(X)
+plot(Knet)
+
+#Fit models with lppm
+# homogeneous Poisson on the network — analogue of your m1
+m1_net <- lppm(X ~ 1)
+# log-linear trend along the transect's length
+m_trend <- lppm(X ~ y)
+# quadratic trend, in case intensity rises/falls and comes back
+m_trend2 <- lppm(X ~ y + I(y^2))
+# offset version analogous to your earlier m4, using the kernel-smoothed
+# network density as a fixed covariate shape
+m_offset <- lppm(X ~ 1 + offset(log(dens)))
+
+#Compare and diagnose
+AIC(m1_net); AIC(m_trend); AIC(m_trend2); AIC(m_offset)
+anova(m1_net, m_trend, test = "LRT")
+
+# compare fitted intensity to the empirical K-function as a check
+lam_hat <- predict(m_trend)
+linearKinhom(X, lambda = lam_hat)
