@@ -125,10 +125,10 @@ rm(mesh_data_fit,mesh_inla,mesh_regular)
 
 for (i in 1:length(cutoff)){
   plot(list_mesh_regular[[i]]$mesh, main = NA, edge.color = "grey60", asp = 1)
-  points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+  points(data_holotv$X, data_holotv$Y, pch = 19, col = "black",cex = 0.3)
   
   plot(list_mesh_data_fit[[i]]$mesh, main = NA, edge.color = "grey60", asp = 1)
-  points(data_holotv$X, data_holotv$Y, pch = 19, col = "red",cex = 0.3)
+  points(data_holotv$X, data_holotv$Y, pch = 19, col = "black",cex = 0.3)
 }
 
 
@@ -906,22 +906,22 @@ plot_grid(
     data.frame(observed,predicted_none),x = "observed", y = "predicted_none",
     add = "reg.line", title = "No covariates") +
     stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
-    AFH_theme,
+    theme(),
   ggscatter(
     data.frame(observed,predicted_bathy),x = "observed", y = "predicted_bathy",
     add = "reg.line", title = "Bathymetry") +
     stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
-    AFH_theme,
+    theme(),
   ggscatter(
     data.frame(observed,predicted_temp),x = "observed", y = "predicted_temp",
     add = "reg.line", title = "Bottom temperature") +
     stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
-    AFH_theme,
+    theme(),
   ggscatter(
     data.frame(observed,predicted_temp_bathy),x = "observed", y = "predicted_temp_bathy",
     add = "reg.line", title = "Bathymetry and Bottom temperature") +
     stat_cor(aes(label = paste(..r.label..)),label.x = 1000, label.y = 3000) +
-    AFH_theme
+    theme()
 )
 
 ## cross validation ####
