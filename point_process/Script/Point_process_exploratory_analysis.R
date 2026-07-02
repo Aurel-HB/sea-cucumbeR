@@ -86,6 +86,12 @@ for (stn in names(list_PPP)){
   CSR_PP_2025[CSR_PP_2025$STN==stn,]$Hopkins <- hopkins_index
 }
 
+# check the randomness ####
+Random_PP <- CSR_PP_2025 %>%
+  filter(Quadrat > 0.05) %>%
+  filter(DCLF > 0.01) %>%
+  filter(Hopkins %in% 0.8:1.2)
+
 # ACP ####
 CSR_acp <- CSR_PP_2025 %>% 
   select(Quadrat, DCLF, Hopkins)
@@ -95,6 +101,7 @@ row.names(CSR_acp) <- CSR_PP_2025$STN
 acp3 = FactoMineR::PCA(CSR_acp,scale.unit=F, ncp=5, graph=F)
 acp3
 fviz_pca_biplot(acp3,
+                geom = (c("point")),
                 addEllipses = T,      # Add ellipses for categories
                 repel = F,            # Avoid label overlap
                 title = "PCA Biplot")+

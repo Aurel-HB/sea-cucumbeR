@@ -503,6 +503,11 @@ K_scores = get_crps(dt = NEst_Kscore,models = models)
 K_PPP <- as.function(Kinhom(PPP,lambda = density.ppp(PPP,bw.scott(PPP))))(eval_points)
 K_scores_PPP <- get_crps_PPP(dt = NEst_Kscore,models = models,est_PPP = K_PPP)
 
+ggplot()+geom_bar(aes(x=names(K_scores_PPP),y=as.numeric(K_scores_PPP[1,])),
+                  stat="identity")+
+  ylab("")+
+  xlab("")
+
 ##### Intensity score ####
 
 lambda_hat = function(dat){return(as.matrix(density(dat)))}
@@ -515,6 +520,11 @@ lambda_PPP <- as.matrix(density(PPP))
 lambda_scores_PPP <- get_crps_PPP(dt = NEst_lambdascore,
                                   models = models,est_PPP = lambda_PPP)
 
+ggplot()+
+  geom_bar(aes(x=names(lambda_scores_PPP),y=as.numeric(lambda_scores_PPP[1,])),
+           stat="identity")+
+  ylab("")+
+  xlab("")
 
 
 # Show tot #####
