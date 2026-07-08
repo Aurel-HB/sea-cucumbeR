@@ -36,7 +36,8 @@ check_warnings <- function(expr) {
 #Analysis  ####
 ### ### ### ###
 ## Definition of the variable ####
-summary_table <- data.frame()
+scoring_tot <- data.frame()
+residual_tot <- data.frame()
 warnings_list <- list()
 for (index in 1:length(list_PPP)){
   stn <- names(list_PPP)[index]
@@ -97,9 +98,15 @@ for (index in 1:length(list_PPP)){
                               " + offset(im0_kernel_log_scaled)",sep=""))
   fit_lwppp <- ppm(formula)
   
+  # show the potential warnings
+  print(paste(stn,"Locally-weighted Inhomogeneous Poisson Point Process Model",
+              sep="_"))
+  print(fit_lwppp)
+  
 ## Check the resiudal ####
   ##Q–Q plot of smoothed raw residuals Baddeley 2005
   residual <- data.frame(
+    stn = rep(stn,3),
     model = c("fit_ihP","fit_LGCP","fit_lwppp"),
     cor.coef = NA,
     lm.coef = NA  
@@ -149,6 +156,9 @@ for (index in 1:length(list_PPP)){
       lm(q_mean~v_obs)$coefficients["v_obs"])
   }
 ## Apply the scorin of rules of the intensity and K'Ripley function ####
+  ### Setup scoring rule functions ####
+  source(paste(here(),"/point_process/setup_scoring_rules.R",sep=""))
+ 
 }
 
 # Show Point Pattern ####

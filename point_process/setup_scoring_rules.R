@@ -8,25 +8,14 @@ library(data.table)
 set.seed(2026)
 
 ### set parameter ###
-models = c('ihP','LGCP','lwpp')
-
-# temporary
-fit_ihP <- goodfit
-fit_ihP <- fit1
-fit_LGCP <- fitox1
-fit_lwpp <- lwppp
-fit <- list("fit_ihP"=fit_ihP,"fit_LGCP"=fit_LGCP,"fit_lwpp"=fit_lwpp)
-#
-
-##### functions #####
+models = c('ihP','LGCP','lwppp')
 
 # function to simulate point patterns with these parameters
-
 sim = function(type)
 {
   if(type == 'ihP') dat = simulate(fit_ihP)$`Simulation 1`
   if(type == 'LGCP') dat = simulate(fit_LGCP)$`Simulation 1`
-  if(type == 'lwpp') dat = simulate(fit_lwpp)$`Simulation 1`
+  if(type == 'lwppp') dat = simulate(fit_lwppp)$`Simulation 1`
   return(dat)
 }
 
@@ -157,102 +146,22 @@ get_crps_PPP = function(dt,models,est_PPP,ret_abserrmat = FALSE)
   crps = matrix(0,nrow = 1,ncol = length(models))
   
   for(fc_mod_ind  in 1:length(models))
-    {
-      fc_mod = models[fc_mod_ind]
-      
-      # get relevant sections of the matrix containing the mean absolute errors
-      N = nn/length(models)
-      
-      dt_fc_mat = abs_err_vector[(fc_mod_ind-1) * N + 1:N]
-      fc_fc_mat= abs_err_matrix[(fc_mod_ind-1) * N + 1:N,(fc_mod_ind-1) * N + 1:N]
-      
-      crps[1,fc_mod_ind] = mean(dt_fc_mat[dt_fc_mat>0]) - 1/2 * mean(fc_fc_mat[fc_fc_mat>0])
-      
-    }
+  {
+    fc_mod = models[fc_mod_ind]
+    
+    # get relevant sections of the matrix containing the mean absolute errors
+    N = nn/length(models)
+    
+    dt_fc_mat = abs_err_vector[(fc_mod_ind-1) * N + 1:N]
+    fc_fc_mat= abs_err_matrix[(fc_mod_ind-1) * N + 1:N,(fc_mod_ind-1) * N + 1:N]
+    
+    crps[1,fc_mod_ind] = mean(dt_fc_mat[dt_fc_mat>0]) - 1/2 * mean(fc_fc_mat[fc_fc_mat>0])
+    
+  }
   
   CRPS = data.table(crps)
   setnames(CRPS,models)
   row.names(CRPS) = "PPP"
   
   if(ret_abserrmat) return(abs_err_matrix) else return(CRPS)
-}
-
-get_crps_errbars = function(aem,models)
-{
-  n = length(models)
-  N = dim(aem)[1]/n
-  
-  mod_2_vec = paste0('obs_',rep(models,each = n),'_fc_',rep(models,n))
-  
-  ret_dt = data.table()
-  
-  for(dat_mod_ind  in 1:length(models))
-  {
-    for(fc_mod_ind  in 1:length(models))
-    {
-      data_mod = models[dat_mod_ind]
-      fc_mod = models[fc_mod_ind]
-      
-      # get relevant sections of the matrix containing the mean absolute errors
-      dt_fc_mat = aem[(dat_mod_ind-1) * N + 1:N, (fc_mod_ind-1) * N + 1:N]
-      fc_fc_mat= aem[(fc_mod_ind-1) * N + 1:N,(fc_mod_ind-1) * N + 1:N]
-      
-      
-      crps1 = apply(X = dt_fc_mat,MARGIN = 2,FUN = mean)
-      crps2 = mean(fc_fc_mat[fc_fc_mat>0])
-      
-      crps = crps1 - 1/2 * crps2
-      
-      name = paste0('obs_',models[dat_mod_ind],'_fc_',models[fc_mod_ind])
-      dt_temp = data.table(crps)
-      setnames(dt_temp,name)
-      
-      ret_dt = data.table(ret_dt,dt_temp)
-      
-    }
-  }
-  return(ret_dt) 
-}
-
-
-#### permutation tests ####
-
-#' Run a permutation test of the pairwise difference between two vectors of numbers
-#' @param a Vector, the scores from one method
-#' @param b Vector, the scores from some other method
-#' @param N Integer, the size of the permutation distribution
-#' @return A list with the mean of the difference and the permutation distribution of that difference
-#' @examples
-#' N = 1e2
-#' trend  = 1:N
-#' a = trend + .01 + rnorm(N, .001)
-#' b = trend - .01 + rnorm(N, .001)
-#' l = permutation_test_difference(a,b)
-#' q = sum(l$D <= l$d_bar) / length(l$D)
-#' @author Alex
-#' 
-permutation_test_difference = function(a,
-                                       b,
-                                       pval = TRUE,
-                                       N = 5e3){
-  n = length(a)
-  d = a - b
-  d_bar = mean(d)
-  D = NULL
-  for(i in 1:N){
-    swap = rbinom(n,1,0.5)
-    w_swap = which(swap == 1)
-    d_i = d
-    d_i[w_swap] = -d_i[w_swap]
-    D[i] = mean(d_i)
-  }
-  
-  p_val = NULL
-  if(pval)
-  {
-    p_val  = rank(x = c(d_bar,D))[1]/(N+1)
-    
-  }
-  
-  return(list(d_bar = d_bar, D = D,p_val = p_val))
 }

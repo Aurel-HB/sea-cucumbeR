@@ -487,7 +487,7 @@ as.numeric(lm(q_mean~v_obs)$coefficients["v_obs"])
 ### ### ### ###
 # Validation by scoring rules ####
 ### ### ### ###
-source(paste(here(),"/point_process/script/setup_scoring_rules.R",sep=""))
+source(paste(here(),"/point_process/script/setup_scoring_rules_first_test.R",sep=""))
 N = 100 # samples to compute for CRPS
 
 ##### K-score ####
