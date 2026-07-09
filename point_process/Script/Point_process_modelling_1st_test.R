@@ -38,11 +38,11 @@ data_substrate <- readRDS(paste(here(),
               "/via3_data_exploration/Data/substrat/data_substrat_2025.rds",
               sep=""))
 
-list_PPP_epsg4461 <- readRDS(paste(here(),
-                    "/point_process/Data/list_PPP_2025_epsg4461.rds",sep=""))
+list_PPP_epsg4467 <- readRDS(paste(here(),
+                    "/point_process/Data/list_PPP_2025_epsg4467.rds",sep=""))
 
-data_position_epsg4461<- readRDS(
-        paste(here(),"/point_process/Data/data_position_2025_epsg4461.rds",sep=""))
+data_position_epsg4467<- readRDS(
+        paste(here(),"/point_process/Data/data_position_2025_epsg4467.rds",sep=""))
 
 ### ### ### ### ### ### ###
 # Start with one PPP ####
@@ -54,7 +54,7 @@ PPP <- list_PPP[[stn]] # PPP<-list_PPP[["179"]] PPP<-list_PPP[["149"]]
 PPP[["window"]][["units"]] <- list("metre","metres")
 #PPP[["window"]][["yrange"]] <- PPP[["window"]][["yrange"]] - PPP[["window"]][["yrange"]][[1]]
 
-#PPP <- list_PPP_epsg4461[[stn]]
+#PPP <- list_PPP_epsg4467[[stn]]
 ## rescale the coordinates
 #PPP$x <- PPP$x/1000
 #PPP$y <- PPP$y/1000

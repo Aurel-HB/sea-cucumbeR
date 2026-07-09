@@ -117,8 +117,8 @@ X <- ppp(as.data.frame(new_coord)$X,
 # Create a list with all PPP
 ############################
 
-list_PPP_epsg4461 <- list()
-data_position_epsg4461 <- data.frame()
+list_PPP_epsg4467 <- list()
+data_position_epsg4467 <- data.frame()
 stations <- names(list_PPP)
 
 for (stn in stations){
@@ -172,8 +172,8 @@ for (stn in stations){
   X[["window"]][["units"]] <- list("metre","metres")
   
   # save the data ####
-  list_PPP_epsg4461[[stn]] <- X
-  data_position_epsg4461 <- rbind(data_position_epsg4461,
+  list_PPP_epsg4467[[stn]] <- X
+  data_position_epsg4467 <- rbind(data_position_epsg4467,
                                   data.frame(
                                     station = stn,
                                     X = X[["x"]],
@@ -182,7 +182,7 @@ for (stn in stations){
   
 }
 
-saveRDS(list_PPP_epsg4461,
-        paste(here(),"/point_process/Data/list_PPP_2025_epsg4461.rds",sep=""))
-saveRDS(data_position_epsg4461,
-        paste(here(),"/point_process/Data/data_position_2025_epsg4461.rds",sep=""))
+saveRDS(list_PPP_epsg4467,
+        paste(here(),"/point_process/Data/list_PPP_2025_epsg4467.rds",sep=""))
+saveRDS(data_position_epsg4467,
+        paste(here(),"/point_process/Data/data_position_2025_epsg4467.rds",sep=""))
