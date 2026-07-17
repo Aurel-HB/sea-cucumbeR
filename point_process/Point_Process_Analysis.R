@@ -155,10 +155,55 @@ for (index in 1:length(list_PPP)){
     residual$lm.coef[index] <- as.numeric(
       lm(q_mean~v_obs)$coefficients["v_obs"])
   }
+  
+  residual_tot <- rbind(residual_tot,residual)
+  
 ## Apply the scorin of rules of the intensity and K'Ripley function ####
   ### Setup scoring rule functions ####
   source(paste(here(),"/point_process/setup_scoring_rules.R",sep=""))
- 
+  N = 100 # samples to compute for CRPS
+  
+  ##### K-score ####
+  eval_points = seq(0.1,0.375,by = 0.005) # points where the K estimator is to be evaluated. 
+  #Needs to take very specific form due to the way K_hat is coded in spatstat
+
+  K_hat = function(dat){return(as.function(Kinhom(dat,
+                                                  lambda = density.ppp(
+                                                    PPP,bw.scott(PPP))))
+                               (eval_points))}
+  
+  NEst_Kscore = computeNEst(mod = models,est = K_hat,N = N)
+  
+  K_scores = get_crps(dt = NEst_Kscore,models = models)
+  
+  K_PPP <- as.function(Kinhom(PPP,lambda = density.ppp(PPP,bw.scott(PPP))))
+  (eval_points)
+  K_scores_PPP <- get_crps_PPP(dt = NEst_Kscore,models = models,est_PPP = K_PPP)
+  
+  ##### Intensity score ####
+  
+  lambda_hat = function(dat){return(as.matrix(density(dat)))}
+  
+  NEst_lambdascore = computeNEst(mod = models,est = lambda_hat,N = N,
+                                 silence = FALSE)
+  
+  lambda_scores = get_crps(dt = NEst_lambdascore,models = models)
+  
+  lambda_PPP <- as.matrix(density(PPP))
+  lambda_scores_PPP <- get_crps_PPP(dt = NEst_lambdascore,
+                                    models = models,est_PPP = lambda_PPP)
+  
+  scoring_tot <- rbind(scoring_tot,
+                       data.frame(
+                         STN = stn,
+                         model = names(K_scores_PPP),
+                         lambda_score = c(lambda_scores_PPP[1,1],
+                                          lambda_scores_PPP[1,2],
+                                          lambda_scores_PPP[1,3]),
+                         K_score = c(K_scores_PPP[1,1],
+                                          K_scores_PPP[1,2],
+                                          K_scores_PPP[1,3])
+                       ))
 }
 
 # Show Point Pattern ####
