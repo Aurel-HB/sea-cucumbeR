@@ -99,6 +99,7 @@ get_crps = function(dt,models,ret_abserrmat = FALSE)
       dt_fc_mat = abs_err_matrix[(dat_mod_ind-1) * N + 1:N, (fc_mod_ind-1) * N + 1:N]
       fc_fc_mat= abs_err_matrix[(fc_mod_ind-1) * N + 1:N,(fc_mod_ind-1) * N + 1:N]
       
+      # calculate the proper K-function score
       crps[dat_mod_ind,fc_mod_ind] = mean(dt_fc_mat[dt_fc_mat>0]) - 1/2 * mean(fc_fc_mat[fc_fc_mat>0])
       
     }

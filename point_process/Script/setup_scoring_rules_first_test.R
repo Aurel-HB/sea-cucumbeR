@@ -137,6 +137,7 @@ get_crps_PPP = function(dt,models,est_PPP,ret_abserrmat = FALSE)
     if(i %% 100 == 0) print(paste0(i,'/',nn-1))
     abs_err_vector[i] = mean(abs(dt[[i]]-est_PPP))
   }
+  
   # get the integrated absolute error for all column combinations in dt:
   nn = ncol(dt)
   abs_err_matrix = matrix(0,nrow = nn,ncol = nn)
@@ -153,6 +154,29 @@ get_crps_PPP = function(dt,models,est_PPP,ret_abserrmat = FALSE)
   # symmetrize:
   abs_err_matrix = abs_err_matrix + t(abs_err_matrix)
   
+  # other option
+  # get the integrated absolute error for all combinations intra-model in dt:
+  #nn = ncol(dt)/length(models)
+  #list_matrix <- list()
+  #for (mod in models){
+  #  mod_number <- grep(mod,models) -1
+  #  abs_err_matrix <- matrix(0,nrow = nn,ncol = nn)
+  #  
+  #  # fill upper triangle matrix, thereafter symmetrize
+  #  for(i in 1:(nn-1))
+  #  {
+  #    for(j in (i+1):nn)
+  #    {
+  #      abs_err_matrix[i,j] = mean(
+  #        abs(dt[[i+100*mod_number]]-dt[[j+100*mod_number]]))
+  #    }
+  #  }
+  #  # symmetrize:
+  #  abs_err_matrix = abs_err_matrix + t(abs_err_matrix)
+  #  
+  #  list_matrix[[paste("abs_err_matrix",mod,sep="_")]] <- abs_err_matrix
+  #}
+
   
   # proper continuous ranked probability score
   crps = matrix(0,nrow = 1,ncol = length(models))
@@ -164,7 +188,9 @@ get_crps_PPP = function(dt,models,est_PPP,ret_abserrmat = FALSE)
       # get relevant sections of the matrix containing the mean absolute errors
       N = nn/length(models)
       
+      # extract the values concerning the proper model in the abs_err_vector
       dt_fc_mat = abs_err_vector[(fc_mod_ind-1) * N + 1:N]
+      # extract the part of the matrix that only concern the actual model
       fc_fc_mat= abs_err_matrix[(fc_mod_ind-1) * N + 1:N,(fc_mod_ind-1) * N + 1:N]
       
       crps[1,fc_mod_ind] = mean(dt_fc_mat[dt_fc_mat>0]) - 1/2 * mean(fc_fc_mat[fc_fc_mat>0])

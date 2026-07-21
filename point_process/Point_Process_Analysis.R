@@ -32,6 +32,8 @@ check_warnings <- function(expr) {
   list(result = result, warnings = warnings_list)
 }
 
+source(paste(here(),"/point_process/setup_scoring_rules.R",sep=""))
+
 ### ### ### ###
 #Analysis  ####
 ### ### ### ###
@@ -39,7 +41,8 @@ check_warnings <- function(expr) {
 scoring_tot <- data.frame()
 residual_tot <- data.frame()
 warnings_list <- list()
-for (index in 1:length(list_PPP)){
+smoothed_residuals_raw <- list()
+for (index in 11:61){#length(list_PPP)){
   stn <- names(list_PPP)[index]
   PPP <- list_PPP[[stn]]
   PPP[["window"]][["units"]] <- list("metre","metres")
@@ -53,7 +56,8 @@ for (index in 1:length(list_PPP)){
   
 ### Inhomogeneous Log-Gaussian Cox Point Process Model ####
   fit_LGCP <- kppm(PPP~y, clusters = "LGCP",
-                 method="clik2", model="matern",nu=0.3)
+                 #method="clik2", 
+                 model="matern",nu=0.3)
   # show the potential warnings
   print(paste(stn,"Inhomogeneous Log-Gaussian Cox Point Process Model",
               sep="_"))
@@ -79,8 +83,8 @@ for (index in 1:length(list_PPP)){
   pp1$marks <- l1
 
   # 4) smooth the surface with the Nadaraya-Watson smoother
-  im0_kernel <- Smooth(pp1, sigma = bw.ppl(pp1), positive = TRUE)
-  im0_kernel <- Smooth(pp1, sigma = bw.CvL(pp1), positive = TRUE)
+  #im0_kernel <- Smooth(pp1, sigma = bw.ppl(pp1), positive = TRUE)
+  #im0_kernel <- Smooth(pp1, sigma = bw.CvL(pp1), positive = TRUE)
   im0_kernel <- Smooth(pp1, sigma = bw.diggle(pp1), positive = TRUE)
   #bw.CvL=Cronie and van Lieshout's 
   #Criterion for Bandwidth Selection for Kernel Density
@@ -111,10 +115,10 @@ for (index in 1:length(list_PPP)){
     cor.coef = NA,
     lm.coef = NA  
   )
-  for (index in 1:3){
+  for (indic in 1:3){
     # 1. Fit model
-    fit <- list(fit_ihP,fit_LGCP,fit_lwppp)[[index]]
-    name <- residual$model[index]
+    fit <- list(fit_ihP,fit_LGCP,fit_lwppp)[[indic]]
+    name <- residual$model[indic]
     # 2. Smoothed residual field for observed data
     r_obs <- Smooth(residuals(fit, type="raw"), sigma=0.05)
     v_obs <- as.vector(r_obs$v)
@@ -132,8 +136,11 @@ for (index in 1:length(list_PPP)){
       # re-fit model (IMPORTANT step)
       formula <- formula(fit)
       if (name == "fit_LGCP"){
-        fit_sim <- kppm(Xsim~y, clusters = "LGCP", method="clik2",
-                        model="matern",nu=0.3)
+        # be careful to simulation with very few point
+        if (Xsim$n > 4){
+          fit_sim <- kppm(Xsim~y, clusters = "LGCP", #method="clik2",
+                          model="matern",nu=0.3)
+        }
       } else {
         fit_sim <- ppm(Xsim,formula) 
       }
@@ -151,16 +158,41 @@ for (index in 1:length(list_PPP)){
     q_lo <- apply(sim_sorted, 1, quantile, 0.025)
     q_hi <- apply(sim_sorted, 1, quantile, 0.975)
     # 6. Extract correlation from plot Q–Q
-    residual$cor.coef[index] <- as.numeric(cor.test(q_mean,v_obs)$estimate)
-    residual$lm.coef[index] <- as.numeric(
+    residual$cor.coef[indic] <- as.numeric(cor.test(q_mean,v_obs)$estimate)
+    residual$lm.coef[indic] <- as.numeric(
       lm(q_mean~v_obs)$coefficients["v_obs"])
+    
+    smoothed_residuals_raw[[paste(
+      c("fit_ihP","fit_LGCP","fit_lwppp")[[indic]],
+      stn, sep="_"
+    )]] <- ggplot(data.frame(
+          q_mean = q_mean,
+          v_obs = v_obs,
+          q_lo = q_lo,
+          q_hi = q_hi), 
+        aes(x = q_mean, y = v_obs)) +
+      # The main points (plot(q_mean, v_obs))
+      geom_point() + 
+      # The abline(0,1)
+      geom_abline(slope = 1, intercept = 0, color = "black") +
+      # The lines (lines(q_mean, q_lo, ...))
+      geom_line(aes(y = q_lo), linetype = "dashed", color = "red") +
+      geom_line(aes(y = q_hi), linetype = "dashed", color = "red") +
+      # Labels and Title
+      labs(
+        x = "Mean quantile of simulations",
+        y = "Data quantile",
+        title = "Smoothed residuals: raw"
+      ) +
+      # Optional: Clean theme
+      theme_minimal()
   }
   
   residual_tot <- rbind(residual_tot,residual)
   
 ## Apply the scorin of rules of the intensity and K'Ripley function ####
   ### Setup scoring rule functions ####
-  source(paste(here(),"/point_process/setup_scoring_rules.R",sep=""))
+  #source(paste(here(),"/point_process/setup_scoring_rules.R",sep=""))
   N = 100 # samples to compute for CRPS
   
   ##### K-score ####
@@ -169,15 +201,17 @@ for (index in 1:length(list_PPP)){
 
   K_hat = function(dat){return(as.function(Kinhom(dat,
                                                   lambda = density.ppp(
-                                                    PPP,bw.scott(PPP))))
+                                                    PPP,bw.scott(PPP)),
+                                                  nlarge = 2500))
                                (eval_points))}
   
   NEst_Kscore = computeNEst(mod = models,est = K_hat,N = N)
   
-  K_scores = get_crps(dt = NEst_Kscore,models = models)
+  #K_scores = get_crps(dt = NEst_Kscore,models = models)
   
-  K_PPP <- as.function(Kinhom(PPP,lambda = density.ppp(PPP,bw.scott(PPP))))
-  (eval_points)
+  K_PPP <- as.function(
+    Kinhom(PPP,lambda = density.ppp(PPP,bw.scott(PPP)))
+    )(eval_points)
   K_scores_PPP <- get_crps_PPP(dt = NEst_Kscore,models = models,est_PPP = K_PPP)
   
   ##### Intensity score ####
@@ -187,7 +221,7 @@ for (index in 1:length(list_PPP)){
   NEst_lambdascore = computeNEst(mod = models,est = lambda_hat,N = N,
                                  silence = FALSE)
   
-  lambda_scores = get_crps(dt = NEst_lambdascore,models = models)
+  #lambda_scores = get_crps(dt = NEst_lambdascore,models = models)
   
   lambda_PPP <- as.matrix(density(PPP))
   lambda_scores_PPP <- get_crps_PPP(dt = NEst_lambdascore,
@@ -197,12 +231,12 @@ for (index in 1:length(list_PPP)){
                        data.frame(
                          STN = stn,
                          model = names(K_scores_PPP),
-                         lambda_score = c(lambda_scores_PPP[1,1],
+                         lambda_score = as.numeric(c(lambda_scores_PPP[1,1],
                                           lambda_scores_PPP[1,2],
-                                          lambda_scores_PPP[1,3]),
-                         K_score = c(K_scores_PPP[1,1],
+                                          lambda_scores_PPP[1,3])),
+                         K_score = as.numeric(c(K_scores_PPP[1,1],
                                           K_scores_PPP[1,2],
-                                          K_scores_PPP[1,3])
+                                          K_scores_PPP[1,3]))
                        ))
 }
 
