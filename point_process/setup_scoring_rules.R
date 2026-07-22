@@ -49,7 +49,9 @@ computeNEst = function(mod,est,N,silence = TRUE)
       #if(!silence & (i %% 10 == 0)) print(paste0(i,'/',N))
       
       dat = sim(mm)
+      if (dat$n > 4){
       dt_temp[,i] = est(dat)
+      }
     }
     
     dt_temp = as.data.table(dt_temp)
@@ -99,7 +101,7 @@ get_crps = function(dt,models,ret_abserrmat = FALSE)
       dt_fc_mat = abs_err_matrix[(dat_mod_ind-1) * N + 1:N, (fc_mod_ind-1) * N + 1:N]
       fc_fc_mat= abs_err_matrix[(fc_mod_ind-1) * N + 1:N,(fc_mod_ind-1) * N + 1:N]
       
-      # calculate the proper K-function score
+      #calculate the crps
       crps[dat_mod_ind,fc_mod_ind] = mean(dt_fc_mat[dt_fc_mat>0]) - 1/2 * mean(fc_fc_mat[fc_fc_mat>0])
       
     }

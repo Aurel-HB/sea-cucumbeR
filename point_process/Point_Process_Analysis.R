@@ -42,7 +42,8 @@ scoring_tot <- data.frame()
 residual_tot <- data.frame()
 warnings_list <- list()
 smoothed_residuals_raw <- list()
-for (index in 11:61){#length(list_PPP)){
+process_list <- list()
+for (index in 1:length(list_PPP)){
   stn <- names(list_PPP)[index]
   PPP <- list_PPP[[stn]]
   PPP[["window"]][["units"]] <- list("metre","metres")
@@ -53,6 +54,7 @@ for (index in 11:61){#length(list_PPP)){
   # show the potential warnings
   print(paste(stn,"Inhomogeneous Poisson Point Process Model", sep="_"))
   print(fit_ihP)
+  process_list[[paste("fit_ihP",stn, sep="_")]] <- fit_ihP
   
 ### Inhomogeneous Log-Gaussian Cox Point Process Model ####
   fit_LGCP <- kppm(PPP~y, clusters = "LGCP",
@@ -62,6 +64,8 @@ for (index in 11:61){#length(list_PPP)){
   print(paste(stn,"Inhomogeneous Log-Gaussian Cox Point Process Model",
               sep="_"))
   print(fit_LGCP)
+  process_list[[paste("fit_LGCP",stn, sep="_")]] <- fit_LGCP
+  
 ### Locally Weighted Poisson Point Process Model ####
   # 1) find an estimate of lambda Poisson using the previous Poisson model
   fit <- fit_ihP
@@ -96,6 +100,10 @@ for (index in 11:61){#length(list_PPP)){
   im0_kernel_log_scaled[["v"]] <- scale(im0_kernel_log[["v"]])
   summary(im0_kernel_log_scaled)
   
+  if (summary(im0_kernel_log_scaled)$empty){
+    source(paste(here(),"/point_process/empty_case.R",sep=""))
+  } else {
+
   # 5) Fit the final model, maintaining the same covariate dependence specification
   formula <- as.formula(paste("PPP",as.character(fit$trend)[1],
                               as.character(fit$trend)[2],
@@ -106,6 +114,7 @@ for (index in 11:61){#length(list_PPP)){
   print(paste(stn,"Locally-weighted Inhomogeneous Poisson Point Process Model",
               sep="_"))
   print(fit_lwppp)
+  process_list[[paste("fit_lwppp",stn, sep="_")]] <- fit_lwppp
   
 ## Check the resiudal ####
   ##Q–Q plot of smoothed raw residuals Baddeley 2005
@@ -190,12 +199,12 @@ for (index in 11:61){#length(list_PPP)){
   
   residual_tot <- rbind(residual_tot,residual)
   
-## Apply the scorin of rules of the intensity and K'Ripley function ####
+## Apply the scoring of rules of the intensity and K'Ripley function ####
   ### Setup scoring rule functions ####
   #source(paste(here(),"/point_process/setup_scoring_rules.R",sep=""))
   N = 100 # samples to compute for CRPS
   
-  ##### K-score ####
+  ### K-score ####
   eval_points = seq(0.1,0.375,by = 0.005) # points where the K estimator is to be evaluated. 
   #Needs to take very specific form due to the way K_hat is coded in spatstat
 
@@ -214,7 +223,7 @@ for (index in 11:61){#length(list_PPP)){
     )(eval_points)
   K_scores_PPP <- get_crps_PPP(dt = NEst_Kscore,models = models,est_PPP = K_PPP)
   
-  ##### Intensity score ####
+  ### Intensity score ####
   
   lambda_hat = function(dat){return(as.matrix(density(dat)))}
   
@@ -230,7 +239,7 @@ for (index in 11:61){#length(list_PPP)){
   scoring_tot <- rbind(scoring_tot,
                        data.frame(
                          STN = stn,
-                         model = names(K_scores_PPP),
+                         model = models,
                          lambda_score = as.numeric(c(lambda_scores_PPP[1,1],
                                           lambda_scores_PPP[1,2],
                                           lambda_scores_PPP[1,3])),
@@ -238,7 +247,18 @@ for (index in 11:61){#length(list_PPP)){
                                           K_scores_PPP[1,2],
                                           K_scores_PPP[1,3]))
                        ))
+  }
 }
+
+# Save results ####
+saveRDS(scoring_tot, paste(here(),"/point_process/Output/scoring_tot.rds",sep=""))
+saveRDS(residual_tot,
+        paste(here(),"/point_process/Output/residual_tot.rds",sep=""))
+saveRDS(smoothed_residuals_raw, 
+        paste(here(),"/point_process/Output/smoothed_residuals.rds",sep=""))
+saveRDS(process_list, 
+        paste(here(),"/point_process/Output/process_list.rds",sep=""))
+
 
 # Show Point Pattern ####
 ggplot(data = as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))+
@@ -247,3 +267,4 @@ ggplot(data = as.data.frame(cbind(PPP$x,PPP$y,rep("PPP",PPP$n))))+
   ylab("")+xlab("")+
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
+
