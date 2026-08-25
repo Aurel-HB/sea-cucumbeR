@@ -115,28 +115,37 @@ for (index in 1:length(list_PPP)){
               sep="_"))
   print(fit_lwppp)
   process_list[[paste("fit_lwppp",stn, sep="_")]] <- fit_lwppp
+
+  ## Check the residuals ####
+  ## Q–Q plot of smoothed raw residuals Baddeley 2005
   
-## Check the resiudal ####
-  ##Q–Q plot of smoothed raw residuals Baddeley 2005
+  set.seed(123)  #
+  
   residual <- data.frame(
     stn = rep(stn,3),
     model = c("fit_ihP","fit_LGCP","fit_lwppp"),
     cor.coef = NA,
-    lm.coef = NA  
+    lm.coef = NA,
+    p_value_envelope = NA
   )
+  
   for (indic in 1:3){
     # 1. Fit model
     fit <- list(fit_ihP,fit_LGCP,fit_lwppp)[[indic]]
     name <- residual$model[indic]
+    
     # 2. Smoothed residual field for observed data
     r_obs <- Smooth(residuals(fit, type="raw"), sigma=0.05)
     v_obs <- as.vector(r_obs$v)
     v_obs <- v_obs[!is.na(v_obs)]
     # Sort observed values
     v_obs <- sort(v_obs)
+    
     # 3. Monte Carlo simulations
     nsim <- 39
+    set.seed(1000 + indic)  # <-- seed specific to each model, for independent reproducibility
     sim_patterns <- simulate(fit, nsim=nsim)
+    
     # 4. For each simulation:
     sim_sorted <- matrix(NA, nrow=length(v_obs), ncol=nsim)
     for(i in 1:nsim){
@@ -144,60 +153,89 @@ for (index in 1:length(list_PPP)){
       Xsim <- sim_patterns[[i]]
       # re-fit model (IMPORTANT step)
       formula <- formula(fit)
+      fit_sim <- NULL  # <-- reset on each iteration (to fix a potential bug)
       if (name == "fit_LGCP"){
         # be careful to simulation with very few point
         if (Xsim$n > 4){
           fit_sim <- kppm(Xsim~y, clusters = "LGCP", #method="clik2",
-                          model="matern",nu=0.3)
+                          model="matern", nu=0.3)
         }
       } else {
         fit_sim <- ppm(Xsim,formula) 
       }
+      
+      if (is.null(fit_sim)){
+        # Simulation with too few data points: this column is ignored (remains NA)
+        next
+      }
+      
       # smoothed residual field
       r_sim <- Smooth(residuals(fit_sim, type="raw"), sigma=0.05)
-      
       v_sim <- as.vector(r_sim$v)
       v_sim <- v_sim[!is.na(v_sim)]
       # sort values (order statistics)
       sim_sorted[,i] <- sort(v_sim)
     }
+    
+    # We remove the columns that have not been calculated (LGCP cases with too few data points)
+    valid_cols <- colSums(is.na(sim_sorted)) < nrow(sim_sorted)
+    sim_sorted <- sim_sorted[, valid_cols, drop = FALSE]
+    nsim_valid <- ncol(sim_sorted)
+    
     # 5. Expected quantiles (mean of order statistics)
     q_mean <- rowMeans(sim_sorted)
     # Envelopes (pointwise)
     q_lo <- apply(sim_sorted, 1, quantile, 0.025)
     q_hi <- apply(sim_sorted, 1, quantile, 0.975)
+    
     # 6. Extract correlation from plot Q–Q
     residual$cor.coef[indic] <- as.numeric(cor.test(q_mean,v_obs)$estimate)
     residual$lm.coef[indic] <- as.numeric(
       lm(q_mean~v_obs)$coefficients["v_obs"])
     
+    ## --- Envelope Indicator ---
+    # Option 4: Global envelope test (MAD type, Myllymäki/Baddeley)
+    #We combine the observed data (column 1) and the simulations (columns 2:n) into a single matrix
+    all_curves <- cbind(v_obs, sim_sorted)
+    
+    # Point wise standard deviation calculated based solely on simulations (test benchmark)
+    sd_row <- apply(sim_sorted, 1, sd)
+    sd_row[sd_row == 0] <- NA  # évite division par 0
+    
+    # MAD statistic: standardized maximum absolute deviation, for each curve (observed + simulated)
+    mad_stat <- apply(all_curves, 2, function(v) max(abs(v - q_mean) / sd_row, na.rm = TRUE))
+    
+    # Rank of the observed curve among the (1 + nsim_valid) curves
+    # rank 1 = the most extreme (least consistent with the model)
+    rank_obs <- rank(-mad_stat, ties.method = "average")[1]
+    
+    # p-value Monte-Carlo (resolution = 1/(nsim_valid+1))
+    residual$p_value_envelope[indic] <- rank_obs / (nsim_valid + 1)
+    
+    # 7. Q-Q plot with envelope
     smoothed_residuals_raw[[paste(
       c("fit_ihP","fit_LGCP","fit_lwppp")[[indic]],
       stn, sep="_"
     )]] <- ggplot(data.frame(
-          q_mean = q_mean,
-          v_obs = v_obs,
-          q_lo = q_lo,
-          q_hi = q_hi), 
-        aes(x = q_mean, y = v_obs)) +
-      # The main points (plot(q_mean, v_obs))
+      q_mean = q_mean,
+      v_obs = v_obs,
+      q_lo = q_lo,
+      q_hi = q_hi), 
+      aes(x = q_mean, y = v_obs)) +
       geom_point() + 
-      # The abline(0,1)
       geom_abline(slope = 1, intercept = 0, color = "black") +
-      # The lines (lines(q_mean, q_lo, ...))
       geom_line(aes(y = q_lo), linetype = "dashed", color = "red") +
       geom_line(aes(y = q_hi), linetype = "dashed", color = "red") +
-      # Labels and Title
       labs(
         x = "Mean quantile of simulations",
         y = "Data quantile",
-        title = "Smoothed residuals: raw"
+        title = paste0("Smoothed residuals: raw (p = ",
+                       round(residual$p_value_envelope[indic], 3), ")")
       ) +
-      # Optional: Clean theme
       theme_minimal()
   }
   
-  residual_tot <- rbind(residual_tot,residual)
+  residual_tot <- rbind(residual_tot,residual)  
   
 ## Apply the scoring of rules of the intensity and K'Ripley function ####
   ### Setup scoring rule functions ####
