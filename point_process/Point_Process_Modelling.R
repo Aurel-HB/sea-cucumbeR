@@ -43,6 +43,7 @@ residual_tot <- data.frame()
 warnings_list <- list()
 smoothed_residuals_raw <- list()
 process_list <- list()
+count_Xsim_LGCP <- data.frame()
 for (index in 1:length(list_PPP)){
   stn <- names(list_PPP)[index]
   PPP <- list_PPP[[stn]]
@@ -235,7 +236,8 @@ for (index in 1:length(list_PPP)){
       theme_minimal()
   }
   
-  residual_tot <- rbind(residual_tot,residual)  
+  residual_tot <- rbind(residual_tot,residual)
+  count_Xsim_LGCP <- rbind(count_Xsim_LGCP,(data.frame(stn, nsim_valid)))
   
 ## Apply the scoring of rules of the intensity and K'Ripley function ####
   ### Setup scoring rule functions ####
@@ -296,6 +298,8 @@ saveRDS(smoothed_residuals_raw,
         paste(here(),"/point_process/Output/smoothed_residuals.rds",sep=""))
 saveRDS(process_list, 
         paste(here(),"/point_process/Output/process_list.rds",sep=""))
+saveRDS(count_Xsim_LGCP, 
+        paste(here(),"/point_process/Output/nsim_valid_LGCP.rds",sep=""))
 
 
 # Show Point Pattern ####
