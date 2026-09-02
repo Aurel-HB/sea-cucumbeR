@@ -86,9 +86,9 @@ grid_proj <- as.data.frame(grid_tot)[,1:6]
 stock_surface <- as.numeric(st_area(calcul_area)/1e6)
 
 
-###-###-###-###-###-###-###-###
+### - ### - ### - ### - ### - ### 
 # Mesh sensibility analysis ####
-###-###-###-###-###-###-###-###
+### - ### - ### - ### - ### - ###
 
 ## creation of the mesh with R-INLA ####
 cutoff <- c(1,1.852,3,5)
@@ -765,9 +765,9 @@ ggplot(predictions_gamma_regular$data, aes(X, Y, fill = cuts)) +
   theme(aspect.ratio = 3)+
   ggtitle("Prediction (fixed effects + all random effects)")
 
-###-###-###-###-###-###-###
+### - ### - ### - ### - ###
 # Covariates analysis ####
-###-###-###-###-###-###-###
+### - ### - ### - ### - ###
 
 ## check the correlation between the covariates and the density
 ggplot(data=data_holotv, aes(x = bathy, y = density.t_km2)) +
