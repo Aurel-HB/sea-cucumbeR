@@ -94,10 +94,10 @@ data <- data.frame(data, station)
 #############
 data <- data[,7:11]
 
-saveRDS(data,
-        paste(here(),
-              "/via3_data_exploration/Data/processed/data_pixel_2025.rds",
-                    sep=""))
+#saveRDS(data,
+#        paste(here(),
+#              "/via3_data_exploration/Data/processed/data_pixel_2025.rds",
+#                    sep=""))
 
 data_pixel <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/data_pixel_2025.rds",
@@ -143,18 +143,22 @@ feuille_route_essential_start <- feuille_route[, c("Date",
                                                    "N° Station",
                                                    "Heure début Virage",
                                                    "Latitude début Virage (N)",
-                                                   "Longitude début Virage (W)")]
+                                                   "Longitude début Virage (W)",
+                                                   "Sonde début Virage (m)",
+                                                   "Etat de mer")]
 
 feuille_route_essential_stop <- feuille_route[, c("Date",
                                                   "N° Station",
                                                   "Heure fin Filage",
                                                   "Latitude fin Filage (N)",
-                                                  "Longitude fin Filage (W)")]
+                                                  "Longitude fin Filage (W)",
+                                                  "Sonde fin filage (m)")]
 
 names(feuille_route_essential_start) <- c("Date", "Station", "heure",
-                                          "latitude", "longitude") 
+                                          "latitude", "longitude", "Sonde",
+                                          "Condition_mer") 
 names(feuille_route_essential_stop) <- c("Date", "Station", "heure",
-                                         "latitude", "longitude")
+                                         "latitude", "longitude", "Sonde")
 #transform the coordinates to use in sf
 source(paste(here(),
              "/via3_data_exploration/fct_degree_decimal.R",
@@ -186,11 +190,11 @@ source(paste(here(),
              sep=""))
 
 coord <- transfo_WG84_WGSPM(feuille_route_essential_start[,c(2,5,4)])
-feuille_route_essential_start$latitude <- coord$coords.x2
-feuille_route_essential_start$longitude <- coord$coords.x1
+feuille_route_essential_start$latitude <- coord$y
+feuille_route_essential_start$longitude <- coord$x
 coord <- transfo_WG84_WGSPM(feuille_route_essential_stop[,c(2,5,4)])
-feuille_route_essential_stop$latitude <- coord$coords.x2
-feuille_route_essential_stop$longitude <- coord$coords.x1
+feuille_route_essential_stop$latitude <- coord$y
+feuille_route_essential_stop$longitude <- coord$x
 rm(coord)
 
 # transform the time of a haul in a number of seconds
@@ -286,10 +290,10 @@ for (stn in unique(data_pixel$station)){
   data_position <- rbind(data_position, pixel[,c(5,1,6,7,4)])
 }
 
-saveRDS(data_position,
-        paste(here(),
-              "/via3_data_exploration/Data/processed/data_position_2025.rds",
-              sep=""))
+#saveRDS(data_position,
+#        paste(here(),
+#              "/via3_data_exploration/Data/processed/data_position_2025.rds",
+#              sep=""))
 
 data_position <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/data_position_2025.rds",
@@ -337,10 +341,10 @@ for (indice in 1:nrow(sampling_grid)){
   #### calculate the distance of the haul in the SPM projection
   start <- st_as_sf(data.frame(x=x_start, y=y_start),
                     coords = c("x","y"),
-                    crs = CRS("+init=epsg:4467"))
+                    crs = "4467")
   stop <- st_as_sf(data.frame(x=x_stop, y=y_stop),
                    coords = c("x","y"),
-                   crs = CRS("+init=epsg:4467"))
+                   crs = "4467")
   distance <- as.numeric(st_distance(start,stop))
   
   #extract the time read in second
@@ -401,13 +405,89 @@ for (indice in 1:nrow(count_tot)){
   
 }
 
-
-saveRDS(count_tot,
-        paste(here(),
-              "/via3_data_exploration/Data/processed/HOLOTVSPM2025.rds",
-              sep=""))
+#saveRDS(count_tot,
+#        paste(here(),
+#              "/via3_data_exploration/Data/processed/HOLOTVSPM2025.rds",
+#              sep=""))
 
 count_tot <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/HOLOTVSPM2025.rds",
   sep=""))
 
+
+
+#### correction of the metadata of the seanoe deposit ####
+annotation_summary <- read.csv2(paste(
+  here(),"/via3_data_exploration/Data/processed/01_annotation_summary.csv",
+  sep=""), sep = ",")
+
+#add the start depth and the sea condition at the summary of the annotation
+names(feuille_route_essential_start)[c(2,6,7)] <- c("STN","Depth",
+                                                    "Sea_state")
+annotation_summary <- merge(annotation_summary,
+                            feuille_route_essential_start[,c(2,6,7)])
+
+# translate the sea state from French to English according WMO sea state code
+annotation_summary$Sea_state[
+  grep("calme",annotation_summary$Sea_state)] <- "Calm"
+annotation_summary$Sea_state[
+  grep("peu agitée",annotation_summary$Sea_state)] <- "Slight"
+annotation_summary$Sea_state[
+  grep("très agité",annotation_summary$Sea_state)] <- "Rough"
+annotation_summary$Sea_state[
+  grep("agitée",annotation_summary$Sea_state)] <- "Moderate"
+
+#add the speed of the vessel
+speed <- as.data.frame(sampling_grid) %>%
+  mutate(Speed_vessel = (distance/tot_time)*3600/1852) %>% 
+  select(Id, Speed_vessel)
+
+speed_BAP <- data.frame(Id = c("43B","50B","57B"), Speed_vessel = 0, 
+                        distance = 0, time = 0)
+
+for (indice in 1:nrow(speed_BAP)){
+  stn <- speed_BAP$Id[indice]
+  
+  #calculate the distance needed for the surface
+  data_start <- feuille_route_essential_start %>% filter(STN == stn)
+  data_stop <- feuille_route_essential_stop %>% filter(Station == stn)
+  #### Make a set of coordinates that represent the haul of the station "stn" 
+  x_start <- round(data_start$longitude[1], digits = 3) # digit 3 for millimeter
+  y_start <- round(data_start$latitude[1] , digits = 3)
+  x_stop  <- round(data_stop$longitude[1] , digits = 3)
+  y_stop  <- round(data_stop$latitude[1]  , digits = 3)
+  
+  #### calculate the distance of the haul in the SPM projection
+  start <- st_as_sf(data.frame(x=x_start, y=y_start),
+                    coords = c("x","y"),
+                    crs = "4467")
+  stop <- st_as_sf(data.frame(x=x_stop, y=y_stop),
+                   coords = c("x","y"),
+                   crs = "4467")
+  distance <- as.numeric(st_distance(start,stop))
+  
+  speed_BAP$distance[indice] <- distance
+  speed_BAP$time[indice] <- data_start$temps
+}
+rm(data, data_start, data_stop,x_start,y_start,x_stop,y_stop,
+   start,stop,distance)
+
+speed_BAP$Speed_vessel <- (speed_BAP$distance/speed_BAP$time)*3600/1852
+
+speed <- rbind(speed,speed_BAP[,1:2])
+
+annotation_summary <- merge(annotation_summary,
+                            speed, by.x = "STN", by.y = "Id")
+annotation_summary$Speed_vessel <- round(annotation_summary$Speed_vessel,
+                                         digits = 1)
+
+# rearrangement of the data-table
+annotation_summary <- annotation_summary %>%
+  select(c(1,2,3,4,18,5:10,16,17,11:15))
+
+write.csv(
+  annotation_summary,
+  file = file.path(here(), "via3_data_exploration", "output", "01_annotation_summary.csv"),
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
