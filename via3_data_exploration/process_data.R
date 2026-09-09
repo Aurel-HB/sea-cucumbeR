@@ -281,11 +281,11 @@ for (stn in unique(data_pixel$station)){
   
   length <- 1.5/1920 # the videos are the format 1920*540 and the the GoPro 
   # enable a vision of field of 1.5m so the ratio is 1.5/1920
-  height <- 1/380 #ratio for the first part of the video 380 pixel = 1m
+  #height <- 1/380 #ratio for the first part of the video 380 pixel = 1m
   
   pixel <- pixel %>%
     mutate(X = x_pixel*length) %>%
-    mutate(Y = time*distance/data_start$temps[1] + (540-y_pixel)*height)
+    mutate(Y = time*distance/data_start$temps[1] + (540-y_pixel)*length)
   
   data_position <- rbind(data_position, pixel[,c(5,1,6,7,4)])
 }
