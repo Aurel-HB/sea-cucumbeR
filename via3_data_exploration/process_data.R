@@ -273,10 +273,10 @@ for (stn in unique(data_pixel$station)){
   # calculate the distance of the haul in the SPM projection
   start <- st_as_sf(data.frame(x=x_start, y=y_start),
                     coords = c("x","y"),
-                    crs = CRS("+init=epsg:4467"))
+                    crs = "4467")
   stop <- st_as_sf(data.frame(x=x_stop, y=y_stop),
                    coords = c("x","y"),
-                   crs = CRS("+init=epsg:4467"))
+                   crs = "4467")
   distance <- as.numeric(st_distance(start,stop))
   
   length <- 1.5/1920 # the videos are the format 1920*540 and the the GoPro 
@@ -285,15 +285,15 @@ for (stn in unique(data_pixel$station)){
   
   pixel <- pixel %>%
     mutate(X = x_pixel*length) %>%
-    mutate(Y = time*distance/data_start$temps[1] + y_pixel*height)
+    mutate(Y = time*distance/data_start$temps[1] + (540-y_pixel)*height)
   
   data_position <- rbind(data_position, pixel[,c(5,1,6,7,4)])
 }
 
-#saveRDS(data_position,
-#        paste(here(),
-#              "/via3_data_exploration/Data/processed/data_position_2025.rds",
-#              sep=""))
+saveRDS(data_position,
+        paste(here(),
+              "/via3_data_exploration/Data/processed/data_position_2025.rds",
+              sep=""))
 
 data_position <- readRDS(paste(
   here(),"/via3_data_exploration/Data/processed/data_position_2025.rds",
