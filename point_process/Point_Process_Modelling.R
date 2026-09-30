@@ -58,12 +58,16 @@ for (index in 1:length(list_PPP)){
   process_list[[paste("fit_ihP",stn, sep="_")]] <- fit_ihP
   
 ### Inhomogeneous Log-Gaussian Cox Point Process Model ####
-  fit_LGCP <- kppm(PPP~y, clusters = "LGCP",
+  fit_LGCP <- #kppm(PPP~1, clusters = "LGCP",
+                kppm(PPP~y, clusters = "LGCP",
+                     statistic="pcf",
                  #method="clik2", 
                  model="matern",nu=0.3)
   # show the potential warnings
   print(paste(stn,"Inhomogeneous Log-Gaussian Cox Point Process Model",
               sep="_"))
+  #print(paste(stn,"Homogeneous Log-Gaussian Cox Point Process Model",
+  #            sep="_"))
   print(fit_LGCP)
   process_list[[paste("fit_LGCP",stn, sep="_")]] <- fit_LGCP
   
