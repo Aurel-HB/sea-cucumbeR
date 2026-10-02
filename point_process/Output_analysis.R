@@ -650,10 +650,12 @@ data_map <- data_map %>%
                                       residual_validation)) %>%
   mutate(selected_model = ifelse(is.na(selected_model),"NA",
                                  selected_model))
+mypalette <- c("#ff71a2","#ffb069","#bdd2f9","#97dda9","#c3c3c3")
 ggplot(data_map)+
-  geom_sf(aes(color=selected_model), size = 5)+
-  scale_color_brewer("selected_model", type = "qua", palette = "Dark2")+
-  geom_sf(data=calcul_area, fill = "#11111111")+
+  geom_sf(data=calcul_area, fill = "#11111100")+
+  geom_sf(aes(fill=selected_model), size = 5,shape = 21)+
+  scale_fill_manual(values = mypalette) +
+  #scale_color_brewer("selected_model", type = "qua", palette = "Dark2")+
   theme(aspect.ratio = 2,
         legend.title = element_blank(),
         title = element_text(color = "black",face = "bold"),
@@ -661,10 +663,10 @@ ggplot(data_map)+
         plot.subtitle = element_text(size = 8,hjust = 0.5),
         panel.border = element_blank(),
         panel.grid.major = element_line(linewidth = 0.25, linetype = 'solid',
-                                        colour = "white"),
+                                        colour = "grey90"),
         panel.background = element_rect(fill = "lightblue"),
         panel.grid.minor = element_line(linewidth = 0.25, linetype = 'solid',
-                                        colour = "white"))+
+                                        colour = "grey90"))+
   labs(title = "Model chosen by station")
 
 #fit_lgcp_y_bounded <- kppm(X ~ y,
