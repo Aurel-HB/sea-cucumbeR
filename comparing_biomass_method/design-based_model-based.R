@@ -79,7 +79,7 @@ source(paste(here(),"/via3_data_exploration/fct_WG84_WGSPM.R", sep=""))
 
 ## import individual position
 data_position <- readRDS(
-  paste(here(),"/point_process/Data/data_position_2025_epsg4461.rds",sep=""))
+  paste(here(),"/point_process/Data/data_position_2025_epsg4467.rds",sep=""))
 
 ## creation of the map ####
 maps_tracks <- ggplot()+
