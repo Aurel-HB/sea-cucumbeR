@@ -40,7 +40,7 @@ list_PPP_epsg4467 <- readRDS(paste(here(),
                      "/point_process/Data/list_PPP_2025_epsg4467.rds",sep=""))
 
 data_position_epsg4467 <- readRDS(paste(here(),
-                    "/point_process/Data/data_position_2025_epsg4467",sep=""))
+                    "/point_process/Data/data_position_2025_epsg4467.rds",sep=""))
 
 ########################################
 # test of Complete Spatial Randomness
