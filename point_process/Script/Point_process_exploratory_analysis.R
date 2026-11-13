@@ -85,12 +85,47 @@ for (stn in names(list_PPP)){
   CSR_PP_2025[CSR_PP_2025$STN==stn,]$DCLF <- dclf$p.value
   CSR_PP_2025[CSR_PP_2025$STN==stn,]$Hopkins <- hopkins_index
 }
+# add the number of count because it influences the accuracy of the test
+CSR_PP_2025$count <- NA
+for (i in 1:nrow(CSR_PP_2025)) {
+  CSR_PP_2025$count[i] <- HOLOTVSPM2025$Total_Number[
+    HOLOTVSPM2025$STN==CSR_PP_2025$STN[i]
+  ]
+}
+
 
 # check the randomness ####
 Random_PP <- CSR_PP_2025 %>%
-  filter(Quadrat > 0.05) %>%
-  filter(DCLF > 0.01) %>%
-  filter(Hopkins %in% 0.8:1.2)
+  filter(DCLF > 0.01)  #p-value 0.01
+
+for (i in 1:nrow(Random_PP)) {
+  m <- Random_PP$count[i]
+  Random_PP$Hopkins_lower[i] <- qf(0.025, 2*m, 2*m)
+  Random_PP$Hopkins_upper[i] <- qf(0.975, 2*m, 2*m)
+  
+  if (Random_PP$Hopkins[i]<Random_PP$Hopkins_lower[i]){
+    Random_PP$Hopkins_test[i] <- "FALSE"
+  } else {
+    if(Random_PP$Hopkins[i]<=Random_PP$Hopkins_upper[i]){
+      Random_PP$Hopkins_test[i] <- "CSR"
+    } else{
+      Random_PP$Hopkins_test[i] <- "FALSE"
+    }
+  }
+}
+Random_PP <- Random_PP %>%
+  filter(Hopkins_test =="CSR") #confidence interval depend number point
+
+Random_PP <- Random_PP %>%
+  filter(Quadrat > 0.05) #p-value 0.05 but problem if not enough point(<50)
+
+print(paste("There is",nrow(Random_PP),"that don't refute the CSR for",
+            "the 3 tests: stations ",
+            Random_PP$STN[1],
+            Random_PP$STN[2],
+            Random_PP$STN[3],
+            sep=" "))
+
 
 # ACP ####
 CSR_acp <- CSR_PP_2025 %>% 
